@@ -4,7 +4,7 @@
 
 import { ArrowLeft, FileText, Calendar, TrendingUp } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { formatDate, getScoreLabel, getScoreColor } from '../../utils/scoring';
+import { formatDate, getScoreLabel } from '../../utils/scoring';
 
 export function AnalysisHistory() {
   const { history, analysis, setCurrentView, completeAnalysis } = useAppStore();
@@ -58,7 +58,6 @@ export function AnalysisHistory() {
 
       <div className="history-list">
         {history.map((item) => {
-          const colors = getScoreColor(item.score);
           const label = getScoreLabel(item.score);
 
           return (
@@ -76,12 +75,7 @@ export function AnalysisHistory() {
                 </div>
 
                 <div
-                  className="history-score"
-                  style={{
-                    backgroundColor: colors.bg,
-                    color: colors.text,
-                    border: `1px solid ${colors.border}`,
-                  }}
+                  className={`history-score history-score-${label.toLowerCase()}`}
                 >
                   <span className="score-number">{Math.round(item.score)}</span>
                   <span className="score-label-small">{label}</span>

@@ -116,7 +116,8 @@ export function CVUpload() {
             type="file"
             accept=".md"
             onChange={handleChange}
-            style={{ display: 'none' }}
+            className="visually-hidden"
+            aria-label="Upload CV file in Markdown format"
           />
 
           <Upload className="upload-icon" size={48} />

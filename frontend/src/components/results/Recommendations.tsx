@@ -23,19 +23,6 @@ export function Recommendations({ recommendations }: RecommendationsProps) {
     return 'low';
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return '#dc2626';
-      case 'medium':
-        return '#d97706';
-      case 'low':
-        return '#059669';
-      default:
-        return '#6b7280';
-    }
-  };
-
   return (
     <div className="recommendations">
       <h3 className="subsection-title">
@@ -55,8 +42,7 @@ export function Recommendations({ recommendations }: RecommendationsProps) {
               >
                 <div className="recommendation-title">
                   <span
-                    className="priority-badge"
-                    style={{ backgroundColor: getPriorityColor(priority) }}
+                    className={`priority-badge ${priority}`}
                   >
                     {priority.toUpperCase()}
                   </span>

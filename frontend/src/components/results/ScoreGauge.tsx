@@ -51,7 +51,7 @@ export function ScoreGauge({ score }: ScoreGaugeProps) {
         </text>
       </svg>
 
-      <div className="score-label" style={{ color: colors.text }}>
+      <div className={`score-label score-label-${label.toLowerCase()}`}>
         {label}
       </div>
     </div>

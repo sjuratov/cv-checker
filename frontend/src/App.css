@@ -149,6 +149,18 @@ body {
   color: #64748b;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* ===== File Success State ===== */
 .file-success {
   display: flex;
@@ -467,6 +479,22 @@ body {
   margin-top: 0.5rem;
 }
 
+.score-label-excellent {
+  color: #065f46;
+}
+
+.score-label-good {
+  color: #1e40af;
+}
+
+.score-label-fair {
+  color: #92400e;
+}
+
+.score-label-poor {
+  color: #991b1b;
+}
+
 .score-summary {
   flex: 1;
 }
@@ -543,6 +571,22 @@ body {
   font-size: 1.25rem;
 }
 
+.subscore-value-excellent {
+  color: #065f46;
+}
+
+.subscore-value-good {
+  color: #1e40af;
+}
+
+.subscore-value-fair {
+  color: #92400e;
+}
+
+.subscore-value-poor {
+  color: #991b1b;
+}
+
 .subscore-bar {
   height: 12px;
   background: #e5e7eb;
@@ -552,8 +596,25 @@ body {
 
 .subscore-fill {
   height: 100%;
+  width: var(--score-width, 0%);
   transition: width 0.5s ease;
   border-radius: 6px;
+}
+
+.subscore-fill-excellent {
+  background-color: #6ee7b7;
+}
+
+.subscore-fill-good {
+  background-color: #93c5fd;
+}
+
+.subscore-fill-fair {
+  background-color: #fcd34d;
+}
+
+.subscore-fill-poor {
+  background-color: #fca5a5;
 }
 
 /* ===== Strengths and Gaps ===== */
@@ -656,6 +717,18 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   flex-shrink: 0;
+}
+
+.priority-badge.high {
+  background-color: #dc2626;
+}
+
+.priority-badge.medium {
+  background-color: #d97706;
+}
+
+.priority-badge.low {
+  background-color: #059669;
 }
 
 .recommendation-text {
@@ -793,6 +866,30 @@ body {
   display: block;
 }
 
+.history-score-excellent {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.history-score-good {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.history-score-fair {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.history-score-poor {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
 .history-card-footer {
   display: flex;
   justify-content: space-between;
@@ -808,6 +905,7 @@ body {
 /* ===== Footer ===== */
 .app-footer {
   background: rgba(0, 0, 0, 0.1);
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   padding: 1.5rem;
   text-align: center;
