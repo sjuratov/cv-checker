@@ -1,6 +1,6 @@
 ---
 description: Main orchestration agent that analyzes user intent and delegates tasks to specialized agents for product management, architecture, planning, development, and Azure deployment.
-tools: ['runSubagent', 'edit', 'search', 'new', 'runCommands', 'runTasks', 'usages', 'problems', 'changes', 'fetch', 'todos']
+tools: ['vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'execute/getTerminalOutput', 'execute/runTask', 'execute/createAndRunTask', 'execute/runInTerminal', 'read/problems', 'read/readFile', 'read/terminalSelection', 'read/terminalLastCommand', 'read/getTaskOutput', 'edit', 'search', 'web/fetch', 'agent', 'context7/*', 'deepwiki/*', 'microsoft.docs.mcp/*', 'ms-python.python/getPythonEnvironmentInfo', 'ms-python.python/getPythonExecutableCommand', 'ms-python.python/installPythonPackage', 'ms-python.python/configurePythonEnvironment', 'todo']
 model: Claude Sonnet 4.5 (copilot)
 name: spec2cloud
 ---
