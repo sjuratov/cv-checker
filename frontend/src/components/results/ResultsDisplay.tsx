@@ -1,47 +1,33 @@
 /**
- * Complete Analysis Results Display
+ * Complete Analysis Results Display with Tabbed Interface
  */
 
 import { ArrowLeft } from 'lucide-react';
 import type { AnalyzeResponse } from '../../types/api';
 import { useAppStore } from '../../store/useAppStore';
-import { ScoreGauge } from './ScoreGauge';
-import { Subscores } from './Subscores';
-import { StrengthsGaps } from './StrengthsGaps';
-import { Recommendations } from './Recommendations';
+import { TabNavigation } from './TabNavigation';
+import { CVDocumentTab } from './CVDocumentTab';
+import { JobDescriptionTab } from './JobDescriptionTab';
+import { AnalysisResultsTab } from './AnalysisResultsTab';
 
 interface ResultsDisplayProps {
   result: AnalyzeResponse;
 }
 
 export function ResultsDisplay({ result }: ResultsDisplayProps) {
-  const { setCurrentView, clearAnalysis } = useAppStore();
+  const { setCurrentView, clearAnalysis, activeTab, setActiveTab } = useAppStore();
 
-  // Calculate subscores
-  const skillScore =
-    result.skill_matches.length > 0
-      ? (result.skill_matches.filter((s) => s.candidate_has).length /
-          result.skill_matches.length) *
-        100
-      : 0;
-
-  const experienceScore =
-    typeof result.experience_match.match === 'boolean'
-      ? result.experience_match.match
-        ? 85
-        : 50
-      : 75;
-
-  const educationScore =
-    typeof result.education_match.match === 'boolean'
-      ? result.education_match.match
-        ? 90
-        : 60
-      : 80;
+  const tabs = [
+    { id: 'cv-document', label: 'CV Document' },
+    { id: 'job-description', label: 'Job Description' },
+    { id: 'analysis-results', label: 'Analysis Results' },
+  ];
 
   const handleNewAnalysis = () => {
     clearAnalysis();
     setCurrentView('upload');
+    // Reset to analysis results tab for next time
+    setActiveTab('analysis-results');
   };
 
   return (
@@ -54,47 +40,70 @@ export function ResultsDisplay({ result }: ResultsDisplayProps) {
         <h1 className="results-title">Analysis Results</h1>
       </div>
 
-      <div className="results-content">
-        {/* Overall Score */}
-        <div className="score-section">
-          <ScoreGauge score={result.overall_score} />
-          <div className="score-summary">
-            <h2>Overall Match Score</h2>
-            <p className="summary-text">
-              {result.overall_score >= 75
-                ? "Your CV is a good match for this role. You have most of the required qualifications."
-                : result.overall_score >= 50
-                ? "Your CV shows potential for this role, but there are some gaps to address."
-                : "Your CV may not be the best fit for this role. Consider the recommendations below to strengthen your application."}
-            </p>
-          </div>
+      {/* Tab Navigation */}
+      <TabNavigation
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+
+      {/* Tab Content */}
+      <div className="tab-panels">
+        {/* CV Document Tab */}
+        <div
+          role="tabpanel"
+          id="tabpanel-cv-document"
+          aria-labelledby="tab-cv-document"
+          hidden={activeTab !== 'cv-document'}
+          className="tab-panel"
+        >
+          {activeTab === 'cv-document' && (
+            <CVDocumentTab cvMarkdown={result.cv_markdown} />
+          )}
         </div>
 
-        {/* Subscores */}
-        <Subscores
-          skillMatches={skillScore}
-          experienceMatch={experienceScore}
-          educationMatch={educationScore}
-        />
-
-        {/* Strengths and Gaps */}
-        <StrengthsGaps strengths={result.strengths} gaps={result.gaps} />
-
-        {/* Recommendations */}
-        <Recommendations recommendations={result.recommendations} />
-
-        {/* Actions */}
-        <div className="results-actions">
-          <button className="btn btn-primary" onClick={handleNewAnalysis}>
-            Start New Analysis
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => setCurrentView('history')}
-          >
-            View History
-          </button>
+        {/* Job Description Tab */}
+        <div
+          role="tabpanel"
+          id="tabpanel-job-description"
+          aria-labelledby="tab-job-description"
+          hidden={activeTab !== 'job-description'}
+          className="tab-panel"
+        >
+          {activeTab === 'job-description' && (
+            <JobDescriptionTab
+              jobDescription={result.job_description}
+              sourceType={result.source_type}
+              sourceUrl={result.source_url}
+            />
+          )}
         </div>
+
+        {/* Analysis Results Tab */}
+        <div
+          role="tabpanel"
+          id="tabpanel-analysis-results"
+          aria-labelledby="tab-analysis-results"
+          hidden={activeTab !== 'analysis-results'}
+          className="tab-panel"
+        >
+          {activeTab === 'analysis-results' && (
+            <AnalysisResultsTab result={result} />
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="results-actions">
+        <button className="btn btn-primary" onClick={handleNewAnalysis}>
+          Start New Analysis
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => setCurrentView('history')}
+        >
+          View History
+        </button>
       </div>
     </div>
   );

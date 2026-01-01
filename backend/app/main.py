@@ -543,15 +543,23 @@ async def analyze_cv(
             job_description=request.job_description,
         )
 
-        # If Cosmos DB is configured and we have CV/Job IDs, create a proper analysis document
-        if cosmos_repository and cv_id and job_id:
+        # Determine source type (will be enhanced when LinkedIn integration is added to analyze endpoint)
+        source_type = "manual"
+        source_url = None
+        
+        # If Cosmos DB is configured, create analysis document with full content
+        if cosmos_repository:
             try:
-                # Create analysis document with CV and Job references
+                # Create analysis document with CV and job content
                 analysis_id = await cosmos_repository.create_analysis(
                     user_id=user_id,
+                    cv_markdown=request.cv_markdown,
+                    job_description=request.job_description,
+                    source_type=source_type,
+                    source_url=source_url,
+                    result=analysis_result,
                     cv_id=cv_id,
                     job_id=job_id,
-                    result=analysis_result,
                 )
                 logger.info(f"Created analysis document: {analysis_id}")
                 # Update the analysis_result ID to match the Cosmos DB document
@@ -563,6 +571,10 @@ async def analyze_cv(
         # Convert internal model to API response
         response = AnalyzeResponse(
             analysis_id=analysis_result.id,
+            cv_markdown=request.cv_markdown,
+            job_description=request.job_description,
+            source_type=source_type,
+            source_url=source_url,
             overall_score=analysis_result.overall_score,
             skill_matches=[
                 SkillMatchResponse(**match.model_dump())
@@ -841,10 +853,10 @@ async def get_history(
         # Fetch analyses for the user
         analyses = await repository.list_analyses(user_id, limit=limit, offset=0)
         
-        # Build history with linked CV and Job data
+        # Build history with full analysis data including CV and job content
         history_items = []
         for analysis in analyses:
-            # Fetch CV and Job documents if IDs are available
+            # Get CV filename and job title from references if available (deprecated)
             cv_filename = "Unknown CV"
             job_title = "Unknown Job"
             
@@ -866,6 +878,10 @@ async def get_history(
                 "score": analysis.overallScore,
                 "result": {
                     "analysis_id": analysis.id,
+                    "cv_markdown": analysis.cvMarkdown,
+                    "job_description": analysis.jobDescription,
+                    "source_type": analysis.sourceType,
+                    "source_url": analysis.sourceUrl,
                     "overall_score": analysis.overallScore,
                     "skill_matches": analysis.skillMatches,
                     "experience_match": analysis.experienceMatch,

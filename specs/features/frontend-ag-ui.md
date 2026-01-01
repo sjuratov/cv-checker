@@ -716,6 +716,336 @@ If backend returns simple strings:
 
 ---
 
+### FR-FE6: Tabbed Analysis Report Interface
+
+#### FR-FE6.1: Tab Navigation Component
+**Description:** Implement a tabbed interface to organize analysis results into three distinct sections.
+
+**Requirements:**
+- **Three Tabs:**
+  1. CV Document
+  2. Job Description
+  3. Analysis Results
+- **Tab UI Elements:**
+  - Horizontal tab bar at top of results section
+  - Each tab shows label text
+  - Active tab visual indicator (underline, color change, or background highlight)
+  - Inactive tabs styled subtly (lower opacity or neutral color)
+- **Tab State Management:**
+  - Track active tab in application state (`activeTab: 'cv' | 'job' | 'results'`)
+  - Default active tab: "Analysis Results"
+  - Persist active tab using `sessionStorage` key `cv-checker:active-tab`
+  - Restore tab state on page reload within same session
+- **Keyboard Navigation:**
+  - Arrow keys (←/→) navigate between tabs
+  - Tab key moves focus to tab, then into tab content
+  - Enter/Space activates focused tab
+- **Accessibility:**
+  - ARIA role `tablist` on container
+  - ARIA role `tab` on each tab button
+  - ARIA role `tabpanel` on content area
+  - `aria-selected="true"` on active tab
+  - `aria-controls` linking tab to its panel
+  - `aria-labelledby` on panel referencing tab
+- **Responsive Behavior:**
+  - Desktop/Tablet: Full-width horizontal tabs
+  - Mobile: May condense to scrollable horizontal tabs or dropdown selector
+
+**UI Elements:**
+```
+┌─────────────────────────────────────────┐
+│  [CV Document] [Job Description] [Analysis Results*] │
+│─────────────────────────────────────────│
+│                                         │
+│  (Active tab content displayed here)    │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**Priority:** P0 (Must Have)  
+**Related PRD:** Feature 4B
+
+---
+
+#### FR-FE6.2: CV Document Tab
+**Description:** Display the CV content from the analysis response in a formatted, readable view.
+
+**Requirements:**
+- **Data Source:**
+  - CV content comes from `result.cv_markdown` in the analysis response
+  - This ensures consistency for both current and historical analyses
+  - Frontend doesn't need to maintain separate CV state for display
+  - Same CV content is guaranteed for the analysis being viewed
+- **Markdown Rendering:**
+  - Use `react-markdown` library for Markdown-to-HTML conversion
+  - Apply professional styling for readability:
+    - Headings (h1-h6) with hierarchical sizing
+    - Lists (ul, ol) with proper indentation
+    - Code blocks with syntax highlighting (if present)
+    - Links styled and functional
+    - Blockquotes, horizontal rules, tables
+- **Styling:**
+  - Consistent with AG-UI theme
+  - Maximum content width (e.g., 800px) for optimal readability
+  - Adequate line height (1.6-1.8) and spacing
+  - Font size appropriate for body text (14-16px)
+- **XSS Protection:**
+  - Use `remark-gfm` plugin for GitHub Flavored Markdown support
+  - Use `rehype-sanitize` plugin to strip dangerous HTML
+  - Never use `dangerouslySetInnerHTML` without sanitization
+  - Only allow safe HTML tags and attributes
+- **Empty State:**
+  - If no CV available in response, display message:
+    ```
+    No CV available
+    
+    This analysis may be corrupted or incomplete.
+    ```
+- **Scrolling:**
+  - Tab content area has independent scroll
+  - Scroll position resets when switching tabs
+  - Smooth scrolling behavior
+
+**Example Rendered CV:**
+```
+┌─────────────────────────────────────────┐
+│  CV Document                            │
+│─────────────────────────────────────────│
+│  # John Doe                             │
+│  Software Engineer                      │
+│                                         │
+│  ## Experience                          │
+│  **Senior Developer** - Acme Corp       │
+│  2020-2025                              │
+│                                         │
+│  - Led team of 5 engineers             │
+│  - Built scalable APIs with FastAPI    │
+│                                         │
+│  ## Skills                              │
+│  Python, JavaScript, React, Azure       │
+│  (... rest of CV content ...)           │
+└─────────────────────────────────────────┘
+```
+
+**Priority:** P0 (Must Have)  
+**Related PRD:** Feature 4B.1
+
+---
+
+#### FR-FE6.3: Job Description Tab
+**Description:** Display the job description from the analysis response with formatting and source information.
+
+**Requirements:**
+- **Data Source:**
+  - Job description comes from `result.job_description` in the analysis response
+  - Source information from `result.source_type` and `result.source_url`
+  - This ensures the job description matches what was analyzed
+  - Works for both current and historical analyses
+- **Content Display:**
+  - Render job description as formatted text
+  - If job description contains Markdown, use same renderer as CV tab
+  - Otherwise, display as plain text with line breaks preserved
+  - Apply professional styling (same as CV tab)
+- **Source Indicator:**
+  - Display source information above job description based on `result.source_type`:
+    - "Manually entered" - if `source_type === 'manual'`
+    - "From LinkedIn: [URL]" - if `source_type === 'linkedin_url'` and `source_url` is present
+  - Source displayed in small, muted text
+  - LinkedIn URL (if present) is a clickable link
+- **XSS Protection:**
+  - Same sanitization as CV tab using `rehype-sanitize`
+  - Render as plain text if not Markdown
+  - Never execute scripts or render unsafe HTML
+- **Empty State:**
+  - If no job description in response, display:
+    ```
+    No job description available
+    
+    This analysis may be corrupted or incomplete.
+    ```
+- **Long Content Handling:**
+  - Scrollable content area
+  - No truncation (show full description)
+  - Maximum width for readability (800px)
+- **Layout:**
+  - Source indicator at top
+  - Job description content below
+  - Adequate spacing between sections
+
+**Example Job Description Tab:**
+```
+┌─────────────────────────────────────────┐
+│  Job Description                        │
+│─────────────────────────────────────────│
+│  Source: Manually entered               │
+│                                         │
+│  Senior Software Engineer               │
+│                                         │
+│  We are seeking an experienced Python   │
+│  developer to join our team...          │
+│                                         │
+│  Requirements:                          │
+│  • 5+ years Python experience           │
+│  • FastAPI or similar framework         │
+│  • Cloud experience (Azure/AWS)         │
+│  (... rest of job description ...)      │
+└─────────────────────────────────────────┘
+```
+
+**Priority:** P0 (Must Have)  
+**Related PRD:** Feature 4B.2
+
+---
+
+#### FR-FE6.4: Analysis Results Tab
+**Description:** Display comprehensive analysis results (existing ResultsDisplay component).
+
+**Requirements:**
+- **Content:**
+  - Same content as current ResultsDisplay component
+  - Overall score with gauge/progress indicator
+  - Subscores breakdown (Skills, Experience, Keywords, Education)
+  - Top strengths (3-5 items)
+  - Top gaps/areas to improve (3-5 items)
+  - Full recommendations list (categorized, prioritized)
+- **Functionality:**
+  - All existing interactions maintained:
+    - Expandable recommendation cards
+    - Filter/sort recommendations
+    - Tooltips on subscores
+    - Click to expand details
+- **Layout:**
+  - No changes to existing results layout
+  - Component rendered within tab panel
+  - Independent scroll context
+- **Default Tab:**
+  - Analysis Results tab is active by default when results load
+  - After analysis completes, user sees results first
+  - User can navigate to CV/Job tabs to review context
+
+**UI Structure:**
+```
+┌─────────────────────────────────────────┐
+│  Analysis Results                       │
+│─────────────────────────────────────────│
+│           ┌─────────┐                   │
+│           │   75    │  Good Match       │
+│           │  ━━━◉━  │                   │
+│           └─────────┘                   │
+│                                         │
+│  Score Breakdown                        │
+│  Skills Match         ███████░░░ 80/100 │
+│  Experience Match     ██████░░░░ 70/100 │
+│  (... rest of results ...)              │
+└─────────────────────────────────────────┘
+```
+
+**Priority:** P0 (Must Have)  
+**Related PRD:** Feature 4B.3
+
+---
+
+#### FR-FE6.5: Responsive Tab Design
+**Description:** Ensure tabs work seamlessly across all device sizes.
+
+**Requirements:**
+- **Desktop (1024px+):**
+  - Horizontal tab bar with full label text
+  - Tabs evenly spaced or left-aligned
+  - Hover states on inactive tabs (subtle highlight)
+  - Minimum tab width: 120px
+  - Click to activate tab
+- **Tablet (768-1023px):**
+  - Horizontal tab bar (may condense slightly)
+  - Full labels or slightly abbreviated (e.g., "CV", "Job", "Results")
+  - Touch-friendly tab targets (minimum 40x40px)
+  - No hover states (touch-only)
+- **Mobile (320-767px):**
+  - **Option 1:** Horizontal scrollable tabs
+    - Swipe left/right to see all tabs
+    - Active tab scrolls into view
+    - Fade indicators at edges if tabs overflow
+  - **Option 2:** Dropdown selector
+    - Button shows current tab name with dropdown icon
+    - Tap to show tab list menu
+    - Select tab from menu
+  - Minimum touch target: 44x44px per tab
+  - Consider vertical screen space (tabs don't take too much height)
+- **Adaptive Behavior:**
+  - Tab labels may shorten on smaller screens:
+    - "CV Document" → "CV"
+    - "Job Description" → "Job"
+    - "Analysis Results" → "Results"
+  - Icons optional (add visual reinforcement)
+- **Touch Gestures (Future Enhancement):**
+  - Swipe left/right on content area to switch tabs (Phase 3)
+
+**Responsive Examples:**
+
+Desktop:
+```
+┌────────────────────────────────────────────────┐
+│ [CV Document]  [Job Description]  [Analysis Results*] │
+└────────────────────────────────────────────────┘
+```
+
+Mobile (Scrollable):
+```
+┌────────────────────────┐
+│ [CV] [Job] [Results*] ─→│
+└────────────────────────┘
+```
+
+Mobile (Dropdown):
+```
+┌────────────────────────┐
+│ Results ▼              │
+└────────────────────────┘
+```
+
+**Priority:** P0 (Must Have)  
+**Related PRD:** Feature 4B, AC2.1
+
+---
+
+#### FR-FE6.6: Performance Optimization
+**Description:** Ensure tab switching is smooth and responsive.
+
+**Requirements:**
+- **Lazy Rendering:**
+  - Only render active tab content initially
+  - Render other tabs on first activation
+  - Cache rendered content to avoid re-rendering on subsequent visits
+  - Use React.lazy() or conditional rendering
+- **Tab Switching Performance:**
+  - Tab switch response time: <100ms
+  - Smooth transition (no visible lag)
+  - No flash of unstyled content
+  - Content appears instantly when tab clicked
+- **Markdown Rendering Optimization:**
+  - Parse Markdown once and cache result
+  - Memoize rendered components
+  - Use React.memo() for static content
+  - Avoid re-parsing on tab switch
+- **Memory Management:**
+  - Limit number of cached tabs (max 3 - all current tabs)
+  - Clean up when leaving results page
+  - Monitor memory usage for large CVs/job descriptions
+- **Monitoring:**
+  - Track tab switching performance in Application Insights
+  - Log slow switches (>200ms) for investigation
+  - Custom event: `tab_switched` with timing data
+
+**Performance Targets:**
+- Tab switch: <100ms (p95)
+- Markdown parsing: <50ms for typical CV (2-3 pages)
+- Memory usage: <10MB for tab content
+
+**Priority:** P1 (Should Have)  
+**Related PRD:** Performance Requirements
+
+---
+
 ## UI/UX Requirements
 
 ### UX-1: Responsive Design
@@ -1033,6 +1363,7 @@ If backend returns simple strings:
 - **State Structure:**
   ```typescript
   {
+    // Input state - for submission only
     currentCv: {
       filename: string | null;
       content: string | null;
@@ -1040,23 +1371,31 @@ If backend returns simple strings:
     },
     currentJob: {
       description: string;
+      sourceType: 'manual' | 'linkedin_url';
+      sourceUrl?: string;
       lastModified: string | null;
     },
+    // Analysis state
     currentAnalysis: {
       isLoading: boolean;
       error: string | null;
-      result: AnalyzeResponse | null;
+      result: AnalyzeResponse | null;  // Includes cv_markdown and job_description
     },
     analysisHistory: AnalyzeResponse[];  // Last 10 analyses
   }
   ```
+- **Data Flow:**
+  - **For Submission:** Frontend collects CV and job description from user input
+  - **For Display:** After analysis, CV and job data come from `result.cv_markdown` and `result.job_description`
+  - **History Display:** All CV/job content displayed from stored `AnalyzeResponse` objects
+  - This ensures displayed content always matches what was analyzed
 - **Persistence:** 
-  - LocalStorage for CV, job, and history
+  - LocalStorage for current CV/job (pre-submission) and history
   - Session key: `cv-checker-session-${userId || 'anonymous'}`
   - Maximum storage: 5MB (monitor quota)
 - **State Actions:**
   - `uploadCV(file)`, `clearCV()`
-  - `updateJobDescription(text)`, `clearJob()`
+  - `updateJobDescription(text, sourceType, sourceUrl?)`, `clearJob()`
   - `startAnalysis()`, `completeAnalysis(result)`, `failAnalysis(error)`
   - `loadHistory()`, `clearHistory()`
 - **Concurrency Handling:** 
@@ -1821,6 +2160,307 @@ test('analyze request matches OpenAPI spec', () => {
 
 ---
 
+### TECH-13: Tabbed Analysis Report Implementation
+
+#### TECH-13.1: State Management for Tabs
+**Requirements:**
+- **Application State:**
+  - Add `activeTab` field to global state or component state
+  - Type: `'cv' | 'job' | 'results'`
+  - Default value: `'results'`
+  - State management using Zustand, Context API, or AG-UI recommended pattern
+- **Session Persistence:**
+  - Store active tab in `sessionStorage` with key `cv-checker:active-tab`
+  - Save tab state on every tab switch
+  - Restore tab state on component mount
+  - Clear tab state on session end (optional)
+- **State Actions:**
+  - `setActiveTab(tab)` - Update active tab
+  - `getActiveTab()` - Retrieve current active tab
+  - `resetActiveTab()` - Reset to default ('results')
+
+**Example State Management (Zustand):**
+```typescript
+interface TabState {
+  activeTab: 'cv' | 'job' | 'results';
+  setActiveTab: (tab: 'cv' | 'job' | 'results') => void;
+}
+
+const useTabStore = create<TabState>((set) => ({
+  activeTab: 'results',
+  setActiveTab: (tab) => {
+    set({ activeTab: tab });
+    sessionStorage.setItem('cv-checker:active-tab', tab);
+  },
+}));
+```
+
+**Priority:** P0 (Must Have)
+
+---
+
+#### TECH-13.2: Markdown Rendering Libraries
+**Requirements:**
+- **Core Library:** `react-markdown` ✅ **APPROVED**
+  - Install: `npm install react-markdown`
+  - Converts Markdown to React components
+  - Type-safe, actively maintained
+  - Decision approved for production use
+- **GitHub Flavored Markdown Support:** `remark-gfm` ✅ **APPROVED**
+  - Install: `npm install remark-gfm`
+  - Adds support for tables, strikethrough, task lists, autolinks
+  - Use as plugin for react-markdown
+  - Decision approved for production use
+- **XSS Protection:** `rehype-sanitize` ✅ **APPROVED**
+  - Install: `npm install rehype-sanitize`
+  - Sanitizes HTML output to prevent XSS attacks
+  - Removes dangerous tags and attributes
+  - Use as rehype plugin for react-markdown
+  - Decision approved for production use
+- **Syntax Highlighting (Optional):** `react-syntax-highlighter`
+  - Install: `npm install react-syntax-highlighter`
+  - Highlight code blocks if present in CV
+  - Improves readability of technical CVs
+
+**Example Usage:**
+```typescript
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
+
+<ReactMarkdown
+  remarkPlugins={[remarkGfm]}
+  rehypePlugins={[rehypeSanitize]}
+>
+  {cvMarkdown}
+</ReactMarkdown>
+```
+
+**Security Configuration:**
+- Configure `rehype-sanitize` schema to allow only safe elements:
+  - Allow: headings, paragraphs, lists, links, code blocks, tables
+  - Disallow: script, iframe, object, embed, form, input
+  - Sanitize attributes: remove event handlers (onclick, onerror, etc.)
+
+**Priority:** P0 (Must Have)
+
+---
+
+#### TECH-13.3: Tab Component Implementation
+**Requirements:**
+- **Component Structure:**
+  ```typescript
+  <TabbedResults>
+    <TabList>
+      <Tab id="cv" label="CV Document" />
+      <Tab id="job" label="Job Description" />
+      <Tab id="results" label="Analysis Results" />
+    </TabList>
+    <TabPanels>
+      <TabPanel id="cv">
+        <CVDocumentView content={cvMarkdown} />
+      </TabPanel>
+      <TabPanel id="job">
+        <JobDescriptionView content={jobDescription} source={source} />
+      </TabPanel>
+      <TabPanel id="results">
+        <ResultsDisplay analysis={analysisResult} />
+      </TabPanel>
+    </TabPanels>
+  </TabbedResults>
+  ```
+- **Tab Accessibility:**
+  - Use semantic HTML: `<div role="tablist">`, `<button role="tab">`, `<div role="tabpanel">`
+  - ARIA attributes:
+    - `aria-selected="true"` on active tab
+    - `aria-controls="panel-id"` linking tab to panel
+    - `aria-labelledby="tab-id"` on panel
+    - `aria-hidden="true"` on inactive panels
+  - Keyboard event handlers:
+    - `onKeyDown` for Arrow keys, Enter, Space
+    - Focus management with `useRef` and `focus()`
+- **Styling:**
+  - Use AG-UI theme tokens for consistent styling
+  - Active tab: Underline or border-bottom (3px), primary color
+  - Inactive tabs: Neutral color, no underline
+  - Hover state (desktop): Subtle background change
+  - Focus state: Visible outline (2px, high contrast)
+  - Responsive: Adjust tab width and padding for mobile
+
+**Example Tab Styling (CSS/TailwindCSS):**
+```css
+.tab {
+  padding: 12px 24px;
+  border-bottom: 3px solid transparent;
+  color: var(--neutral-color);
+  cursor: pointer;
+}
+
+.tab-active {
+  border-bottom-color: var(--primary-color);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.tab:hover {
+  background-color: var(--neutral-light);
+}
+
+.tab:focus {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}
+```
+
+**Priority:** P0 (Must Have)
+
+---
+
+#### TECH-13.4: Lazy Rendering & Performance
+**Requirements:**
+- **Conditional Rendering:**
+  - Only render active tab content initially
+  - Render other tabs on first activation (lazy load)
+  - Cache rendered tabs to avoid re-rendering
+  - Use React state to track which tabs have been rendered
+- **Implementation Pattern:**
+  ```typescript
+  const [renderedTabs, setRenderedTabs] = useState<Set<string>>(new Set(['results']));
+  
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setRenderedTabs(prev => new Set(prev).add(tab));
+  };
+  
+  return (
+    <TabPanels>
+      {(renderedTabs.has('cv') || activeTab === 'cv') && (
+        <TabPanel id="cv" hidden={activeTab !== 'cv'}>
+          <CVDocumentView content={cvMarkdown} />
+        </TabPanel>
+      )}
+      {/* Similar for other tabs */}
+    </TabPanels>
+  );
+  ```
+- **Markdown Memoization:**
+  - Use `React.useMemo()` to cache parsed Markdown
+  - Dependency: `cvMarkdown` or `jobDescription` content
+  - Prevents re-parsing on tab switches
+  - Example:
+    ```typescript
+    const renderedCV = useMemo(() => (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeSanitize]}
+      >
+        {cvMarkdown}
+      </ReactMarkdown>
+    ), [cvMarkdown]);
+    ```
+- **Component Memoization:**
+  - Wrap tab panels in `React.memo()` to prevent unnecessary re-renders
+  - Only re-render when content or active state changes
+- **Performance Monitoring:**
+  - Measure tab switch time using Performance API
+  - Log to Application Insights if >200ms
+  - Custom event: `tab_switch_performance` with duration
+
+**Priority:** P1 (Should Have)
+
+---
+
+#### TECH-13.5: Responsive Tab Behavior
+**Requirements:**
+- **Breakpoint Detection:**
+  - Use CSS media queries or `window.matchMedia()` to detect screen size
+  - Breakpoints:
+    - Mobile: 320-767px
+    - Tablet: 768-1023px
+    - Desktop: 1024px+
+- **Mobile Implementation Options:**
+  - **Option 1 (Recommended):** Horizontal scrollable tabs
+    - Use `overflow-x: auto` on tab container
+    - Scroll active tab into view with `scrollIntoView()`
+    - Show fade indicators if tabs overflow
+    - CSS:
+      ```css
+      .tab-list-mobile {
+        display: flex;
+        overflow-x: auto;
+        scrollbar-width: none; /* Hide scrollbar */
+      }
+      ```
+  - **Option 2:** Dropdown selector
+    - Replace tab bar with dropdown button
+    - Click to show menu with all tabs
+    - Select tab from menu
+    - Requires additional component logic
+- **Tab Label Adaptation:**
+  - Desktop: Full labels ("CV Document", "Job Description", "Analysis Results")
+  - Tablet: Shortened labels ("CV Document", "Job Desc", "Results")
+  - Mobile: Icons + short labels or icons only (optional)
+  - Use CSS media queries or conditional rendering
+- **Touch Target Sizing:**
+  - Mobile: Minimum 44x44px per tab
+  - Tablet: Minimum 40x40px per tab
+  - Desktop: 120px+ width recommended
+  - Adequate padding and spacing
+
+**Priority:** P0 (Must Have)
+
+---
+
+#### TECH-13.6: Testing Requirements
+**Requirements:**
+- **Unit Tests:**
+  - Tab state management (setActiveTab, getActiveTab)
+  - Session storage persistence (save/restore active tab)
+  - Keyboard navigation handlers
+  - Markdown rendering (XSS protection with rehype-sanitize)
+- **Integration Tests:**
+  - Tab switching updates active tab state
+  - Active tab content displays, inactive tabs hidden
+  - Tab state persists across component re-mounts
+  - Markdown content renders correctly
+- **Accessibility Tests:**
+  - ARIA attributes correct (aria-selected, aria-controls, etc.)
+  - Keyboard navigation works (Arrow keys, Enter, Space)
+  - Screen reader announces tab changes
+  - Focus indicators visible
+  - axe-core: 0 violations
+- **E2E Tests (Playwright/Cypress):**
+  - User can click each tab and see content
+  - Active tab visual indicator updates
+  - Tab state persists on page reload
+  - Tabs work on mobile, tablet, desktop viewports
+  - Markdown content safe (no XSS)
+- **Performance Tests:**
+  - Tab switch time <100ms
+  - Markdown parsing time <50ms for typical CV
+  - Memory usage reasonable for large documents
+
+**Example Test (Jest + Testing Library):**
+```typescript
+test('user can switch between tabs', () => {
+  render(<TabbedResults analysis={mockAnalysis} cv={mockCV} job={mockJob} />);
+  
+  // Initially on Results tab
+  expect(screen.getByRole('tab', { name: 'Analysis Results' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tabpanel', { name: 'Analysis Results' })).toBeVisible();
+  
+  // Switch to CV tab
+  fireEvent.click(screen.getByRole('tab', { name: 'CV Document' }));
+  expect(screen.getByRole('tab', { name: 'CV Document' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tabpanel', { name: 'CV Document' })).toBeVisible();
+  expect(screen.getByRole('tabpanel', { name: 'Analysis Results' })).not.toBeVisible();
+});
+```
+
+**Priority:** P0 (Must Have)
+
+---
+
 ## Acceptance Criteria
 
 ### AC-FE1: Core Workflow (Phase 2 - Week 7-8)
@@ -1983,6 +2623,81 @@ test('analyze request matches OpenAPI spec', () => {
 
 **Priority:** P0 (Must Have)  
 **Related PRD:** AC2.5
+
+---
+
+### AC-FE7: Tabbed Analysis Report Interface (Phase 2 - Week 8-9)
+
+**AC-FE7.1: Tab Navigation**
+- [ ] Three tabs are displayed: "CV Document", "Job Description", "Analysis Results"
+- [ ] User can switch between all three tabs by clicking/tapping
+- [ ] Active tab is clearly indicated with visual styling (underline, color, or background)
+- [ ] Inactive tabs are visually distinct from active tab
+- [ ] Default tab is "Analysis Results" when analysis completes
+- [ ] Tab state persists when switching between tabs during session
+- [ ] Tab state restored on page reload (via sessionStorage)
+
+**AC-FE7.2: Keyboard Navigation**
+- [ ] User can navigate between tabs using Arrow keys (←/→)
+- [ ] Tab key moves focus to tabs, then into tab content
+- [ ] Enter or Space key activates the focused tab
+- [ ] Focus indicators are visible and meet WCAG AA contrast requirements
+- [ ] All tabs are keyboard accessible with no keyboard traps
+
+**AC-FE7.3: CV Document Tab**
+- [ ] Uploaded CV renders correctly with Markdown formatting
+- [ ] Headings, lists, code blocks, and links display properly
+- [ ] Professional styling applied (consistent with AG-UI theme)
+- [ ] XSS protection: No malicious content executes (sanitized with rehype-sanitize)
+- [ ] "No CV available" message displays when no CV uploaded
+- [ ] Content scrolls independently within tab panel
+- [ ] Large CVs (2MB) render without performance issues
+
+**AC-FE7.4: Job Description Tab**
+- [ ] Job description displays with proper formatting
+- [ ] Source indicator shows "Manually entered" for user-pasted jobs
+- [ ] Markdown job descriptions render correctly (if applicable)
+- [ ] Plain text job descriptions display with line breaks preserved
+- [ ] "No job description available" message displays when empty
+- [ ] Long job descriptions are scrollable without truncation
+- [ ] XSS protection: Content is sanitized
+
+**AC-FE7.5: Analysis Results Tab**
+- [ ] All existing results content displays correctly in tab
+- [ ] Overall score gauge/indicator renders properly
+- [ ] Subscores breakdown shows all four scores
+- [ ] Strengths and gaps display correctly
+- [ ] Recommendations list functions as before (expandable, filterable)
+- [ ] All interactive elements work (tooltips, expand/collapse, filters)
+- [ ] Scroll behavior is independent from other tabs
+
+**AC-FE7.6: Responsive Design**
+- [ ] Desktop (1024px+): Horizontal tabs with full labels
+- [ ] Tablet (768-1023px): Tabs work with condensed labels if needed
+- [ ] Mobile (320-767px): Tabs are scrollable or dropdown, touch-friendly
+- [ ] Minimum touch target size met: 44x44px on mobile, 40x40px on tablet
+- [ ] Tab labels adapt appropriately on smaller screens (e.g., "CV Document" → "CV")
+- [ ] All tabs accessible and functional on all screen sizes
+
+**AC-FE7.7: Performance**
+- [ ] Tab switching responds in <100ms (smooth, no lag)
+- [ ] Only active tab content renders initially (lazy rendering)
+- [ ] Markdown content caches to avoid re-parsing on tab revisit
+- [ ] No flash of unstyled content during tab switch
+- [ ] Memory usage remains reasonable for large documents
+- [ ] Tab switching performance logged to Application Insights
+
+**AC-FE7.8: Accessibility**
+- [ ] Tabs use proper ARIA roles: `tablist`, `tab`, `tabpanel`
+- [ ] `aria-selected="true"` on active tab
+- [ ] `aria-controls` links tab to panel
+- [ ] `aria-labelledby` on panel references tab
+- [ ] Screen reader announces active tab and content changes
+- [ ] Color is not the only indicator of active tab (uses underline/border/icon)
+- [ ] Passes automated accessibility testing (axe-core, 0 violations)
+
+**Priority:** P0 (Must Have)  
+**Related PRD:** Feature 4B, AC2.1, AC2.3
 
 ---
 
@@ -2254,12 +2969,16 @@ From backend Phase 1 implementation (see [backend/README.md](../../backend/READM
 
 2. **No history endpoint yet:** `/api/v1/cvs/{cv_id}/analyses` does not exist in Phase 1. Frontend must manage history locally via localStorage.
 
-3. **Stateless design:** Each analysis is independent. The backend doesn't store CVs, jobs, or analysis results (per ADR-004).
+3. **CosmosDB Storage:** Backend now stores CV, job description, and source information with each analysis in CosmosDB. These are returned in the analysis response for display consistency.
 
 4. **Analysis Response Structure:**
 ```typescript
 interface AnalyzeResponse {
   analysis_id: string;           // UUID for tracking
+  cv_markdown: string;            // FULL CV content as submitted
+  job_description: string;        // FULL job description as submitted
+  source_type: 'manual' | 'linkedin_url';  // How job description was provided
+  source_url?: string;            // Optional LinkedIn URL if scraped (Phase 3)
   overall_score: number;          // 0-100
   skill_matches: SkillMatch[];    // Detailed skill matching
   experience_match: object;       // Experience analysis (structure may vary)

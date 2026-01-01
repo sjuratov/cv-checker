@@ -28,6 +28,10 @@ export interface SkillMatch {
 
 export interface AnalyzeResponse {
   analysis_id: string;
+  cv_markdown: string; // Full CV content
+  job_description: string; // Full job description
+  source_type: string; // 'manual' | 'linkedin_url'
+  source_url?: string | null; // LinkedIn URL if applicable
   overall_score: number; // 0-100
   skill_matches: SkillMatch[];
   experience_match: Record<string, any>;

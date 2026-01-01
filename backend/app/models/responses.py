@@ -30,6 +30,13 @@ class AnalyzeResponse(BaseModel):
     """Response model for CV analysis."""
 
     analysis_id: str = Field(description="Unique analysis identifier")
+    cv_markdown: str = Field(description="Full CV content in Markdown format")
+    job_description: str = Field(description="Full job description text")
+    source_type: str = Field(description="Job source type: manual or linkedin_url")
+    source_url: Optional[str] = Field(
+        default=None,
+        description="LinkedIn URL if job was scraped"
+    )
     overall_score: float = Field(
         ge=0.0,
         le=100.0,
@@ -48,6 +55,10 @@ class AnalyzeResponse(BaseModel):
         "json_schema_extra": {
             "example": {
                 "analysis_id": "550e8400-e29b-41d4-a716-446655440000",
+                "cv_markdown": "# John Doe\n\n## Experience\nSoftware Engineer at TechCorp...",
+                "job_description": "We are seeking a Senior Software Engineer with Python expertise...",
+                "source_type": "manual",
+                "source_url": None,
                 "overall_score": 85.5,
                 "skill_matches": [
                     {

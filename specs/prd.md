@@ -515,6 +515,260 @@ Phase 2 introduces **session-based user identification** without authentication:
 
 ---
 
+### Feature 4B: Tabbed Analysis Report Interface
+
+**Description:** Redesign the analysis results page with a 3-tab interface for better organization and readability, allowing users to view their CV, job description, and analysis results in separate, focused tabs.
+
+**Priority:** P0 (Must Have) - UI/UX Enhancement
+
+**User Stories:**
+
+1. As a job seeker, I want to view my CV alongside the analysis results so I can quickly reference what I submitted without scrolling through a long page.
+2. As a job seeker, I want to view the job description alongside recommendations so I can understand the context and verify the AI's interpretation.
+3. As a job seeker, I want organized tabs so I can focus on one aspect at a time (my CV, the job, or the results) without information overload.
+4. As a job seeker using mobile, I want tabs that work well on small screens so I can review my analysis anywhere.
+
+**Requirements:**
+
+**FR4B.1** - Three-Tab Interface
+- **Priority:** P0 (Must Have)
+- **Description:** Implement a tabbed interface with three distinct tabs for analysis page
+- **Acceptance Criteria:**
+  - Three clearly labeled tabs: "CV Document", "Job Description", "Analysis Results"
+  - Only one tab active/visible at a time
+  - Smooth transitions between tabs (no page reload)
+  - Tabs accessible via click/tap
+  - Clear visual indication of active tab (highlighting, underline, or similar)
+  - Inactive tabs clearly distinguishable from active tab
+  - Tab labels concise and descriptive
+
+**FR4B.2** - CV Document Tab
+- **Priority:** P0 (Must Have)
+- **Description:** Display uploaded CV in rendered Markdown format
+- **Acceptance Criteria:**
+  - CV content rendered as formatted Markdown (headers, lists, bold, italic, links)
+  - Markdown rendering is XSS-safe (sanitized)
+  - Maintains original CV structure and formatting
+  - Readable typography (appropriate font size, line height, spacing)
+  - Independent scroll context (scrolling in CV tab doesn't affect other tabs)
+  - Displays full CV content (no truncation)
+  - Handles empty or missing CV gracefully (shows placeholder message)
+
+**FR4B.3** - Job Description Tab
+- **Priority:** P0 (Must Have)
+- **Description:** Display job description in rendered Markdown format
+- **Acceptance Criteria:**
+  - Job description rendered as formatted Markdown
+  - Markdown rendering is XSS-safe (sanitized)
+  - Maintains job description structure and formatting
+  - Readable typography matching CV tab style for consistency
+  - Independent scroll context
+  - Displays full job description (no truncation)
+  - Shows source indicator (manual input vs LinkedIn URL) if applicable
+  - Handles empty or missing job description gracefully
+
+**FR4B.4** - Analysis Results Tab
+- **Priority:** P0 (Must Have)
+- **Description:** Display comprehensive analysis results in organized layout
+- **Acceptance Criteria:**
+  - Contains all existing analysis components:
+    - Overall match score with visual gauge/progress indicator
+    - Subscores breakdown (skills match, experience match, keyword match, education match)
+    - Top strengths (3-5 items)
+    - Top improvement areas (3-5 items)
+    - Detailed actionable recommendations (categorized by Add, Remove, Modify, Emphasize)
+    - Priority indicators (high, medium, low) for recommendations
+  - Independent scroll context
+  - Organized sections with clear headings
+  - Visual hierarchy for scannability
+  - Maintains all existing functionality from single-page view
+
+**FR4B.5** - Default Tab & State Persistence
+- **Priority:** P0 (Must Have)
+- **Description:** Smart default tab selection and session persistence
+- **Acceptance Criteria:**
+  - "Analysis Results" tab is active by default on first page load
+  - Active tab selection persists during browser session (survives page refresh)
+  - Tab state stored in browser's sessionStorage
+  - Returns to last viewed tab when navigating back to analysis page
+  - Session state cleared when starting new analysis
+  - Does not persist across browser sessions (privacy consideration)
+
+**FR4B.6** - Responsive Tab Design
+- **Priority:** P0 (Must Have)
+- **Description:** Tabs work seamlessly across all device sizes
+- **Acceptance Criteria:**
+  - Desktop (≥1024px): Full-width tabs, side-by-side layout
+  - Tablet (768-1023px): Full-width tabs, may stack or remain horizontal
+  - Mobile (≤767px): Horizontal scrollable tabs if needed, or stacked tabs
+  - Touch-friendly tap targets (minimum 44×44px per accessibility guidelines)
+  - No horizontal overflow on small screens (tabs don't break layout)
+  - Tab labels remain readable on all screen sizes (may abbreviate if needed)
+  - Smooth scroll behavior for tab content on all devices
+
+**FR4B.7** - Accessibility & Keyboard Navigation
+- **Priority:** P1 (Should Have)
+- **Description:** Ensure tabs are accessible to all users
+- **Acceptance Criteria:**
+  - Keyboard navigation: Tab key moves focus between tabs
+  - Enter/Space key activates focused tab
+  - ARIA labels for screen readers (`role="tablist"`, `role="tab"`, `role="tabpanel"`)
+  - Active tab indicated in ARIA state (`aria-selected="true"`)
+  - Focus indicator visible for keyboard users
+  - Skip-to-content link available if tabs are at top of page
+  - Color contrast meets WCAG AA standards (4.5:1 for text)
+
+**FR4B.8** - Markdown Rendering Security
+- **Priority:** P0 (Must Have)
+- **Description:** Safely render user-submitted content to prevent XSS attacks
+- **Acceptance Criteria:**
+  - Use XSS-safe Markdown library (e.g., `marked` with DOMPurify, or `react-markdown`)
+  - Sanitize all HTML output before rendering
+  - Disable dangerous Markdown features (raw HTML injection, JavaScript links)
+  - Allow safe Markdown: headers, lists, bold, italic, links (http/https only), code blocks
+  - Test with XSS attack vectors (e.g., `<script>alert('XSS')</script>`, `javascript:` links)
+  - No script execution in rendered content
+  - Security review of Markdown rendering implementation
+
+**FR4B.9** - Tab Content Styling
+- **Priority:** P1 (Should Have)
+- **Description:** Consistent, professional styling across all tabs
+- **Acceptance Criteria:**
+  - CV and Job Description tabs use same Markdown styles (headings, lists, spacing)
+  - Analysis Results tab maintains existing design system
+  - Adequate padding/margins in all tabs for readability
+  - Background colors differentiate tabs if needed (subtle)
+  - Print-friendly styles (optional: print each tab separately)
+  - Dark mode support if application supports dark mode
+
+**Success Metrics:**
+
+1. **User Engagement:**
+   - 80%+ of users interact with at least 2 tabs per analysis session
+   - Average time on analysis page increases by 20% (indicates thorough review)
+   - Tab switch rate: Users switch tabs 3-5 times per session (exploring content)
+
+2. **User Satisfaction:**
+   - User survey: 85%+ rate tabbed interface as "helpful" or "very helpful"
+   - User survey: 75%+ prefer tabbed interface over single-page scrolling view
+   - Reduced bounce rate on analysis results page (users spend more time reviewing)
+
+3. **Usability:**
+   - 95%+ of users can successfully navigate between tabs without guidance
+   - Zero reported XSS vulnerabilities in Markdown rendering
+   - Mobile usability score ≥4.5/5 for tabbed interface
+
+4. **Performance:**
+   - Tab switching response time <100ms (instant feel)
+   - Markdown rendering completes within 200ms for typical CV/job content
+   - No performance degradation on low-end mobile devices
+
+**Technical Considerations:**
+
+1. **Frontend Framework:**
+   - Use native browser tab component if AG-UI provides one
+   - Fallback to custom tab implementation with accessible ARIA attributes
+   - Component state management (active tab, content loading states)
+
+2. **Markdown Rendering:**
+   - Library recommendation: `react-markdown` (if using React) or `marked` + `DOMPurify` (vanilla JS)
+   - Configure to disable HTML injection: `disallowedElements: ['script', 'iframe', 'object', 'embed']`
+   - Allow safe elements only: headings, paragraphs, lists, links, code, emphasis
+   - Apply CSS classes for consistent styling
+
+3. **State Management:**
+   - Store active tab index in `sessionStorage` as `activeAnalysisTab`
+   - Retrieve on component mount, default to "Analysis Results" (index 2) if not set
+   - Clear on new analysis submission
+   - Consider URL hash for deep linking (e.g., `#tab=cv-document`) in future iteration
+
+4. **Performance Optimization:**
+   - Lazy render tab content (render only active tab initially, render others on first view)
+   - Cache rendered Markdown to avoid re-rendering on tab switch
+   - Virtual scrolling for very long CVs/jobs (optional, for performance)
+
+5. **API Considerations:**
+   - **Architectural Decision:** CV markdown content and job description text are stored in CosmosDB along with analysis results
+   - **Data Consistency:** This ensures that current runs and historical analyses have the same data structure
+   - API returns the following fields with analysis results:
+     - `cv_markdown`: Full CV content (stored with analysis)
+     - `job_description`: Full job description text (stored with analysis)
+     - `source_type`: "manual" or "linkedin_url" (stored with analysis)
+     - `source_url`: LinkedIn URL if applicable (stored with analysis)
+   - **Benefits:**
+     - Enables users to view what CV and job they analyzed in the past
+     - Ensures data completeness for historical analyses
+     - Simplifies frontend implementation (single data source)
+     - No separate API calls needed for each tab
+     - Supports future features like data export and multi-device access
+
+6. **Browser Compatibility:**
+   - Test on Chrome, Firefox, Safari, Edge (latest versions)
+   - Test on iOS Safari and Chrome (mobile)
+   - Test on Android Chrome (mobile)
+   - Polyfills for `sessionStorage` if needed (rare)
+
+**Implementation Phases:**
+
+**Phase 2.1: Basic Tab Structure (Week 7)**
+- Implement 3-tab UI component
+- Wire up tab switching logic
+- Add sessionStorage persistence
+- Basic responsive layout
+
+**Phase 2.2: Content Rendering (Week 8)**
+- Integrate Markdown rendering library
+- Implement XSS sanitization
+- Style CV and Job Description tabs
+- Test with sample content
+
+**Phase 2.3: Analysis Results Tab (Week 8-9)**
+- Migrate existing analysis results UI to tab
+- Ensure all components render correctly in tab context
+- Adjust styling for tab container
+
+**Phase 2.4: Polish & Accessibility (Week 9)**
+- Add keyboard navigation
+- Implement ARIA attributes
+- Responsive design testing (mobile, tablet, desktop)
+- Cross-browser testing
+
+**Phase 2.5: Testing & QA (Week 10)**
+- Security testing (XSS attack vectors)
+- Performance testing (large CVs/jobs)
+- Usability testing with real users
+- Bug fixes and refinements
+
+**Risks & Mitigation:**
+
+| Risk | Impact | Probability | Mitigation |
+|------|--------|-------------|------------|
+| Markdown rendering XSS vulnerability | High | Low | Use battle-tested library (DOMPurify); security review; penetration testing |
+| Performance issues with large documents | Medium | Medium | Implement lazy rendering; virtual scrolling; optimize Markdown parser |
+| Tab navigation confusing for users | Medium | Low | User testing early; clear visual indicators; tooltips if needed |
+| Mobile tap targets too small | Medium | Low | Follow accessibility guidelines (44×44px); test on real devices |
+| State persistence conflicts | Low | Low | Use sessionStorage (isolated per tab); clear on new analysis |
+
+**Open Questions:**
+
+1. **Tab Order:** Should we allow users to reorder tabs, or is fixed order (CV, Job, Results) sufficient?
+   - **Recommendation:** Fixed order for MVP; allow customization in Phase 3 if requested
+   - **Owner:** Product + UX
+
+2. **Tab Icons:** Should tabs have icons in addition to labels? (e.g., 📄 CV Document, 📋 Job Description, 📊 Analysis Results)
+   - **Recommendation:** Text-only for MVP; icons add visual clutter on mobile
+   - **Owner:** UX Designer
+
+3. **Print Functionality:** Should users be able to print each tab separately, or entire analysis?
+   - **Recommendation:** Print entire analysis (all tabs) for MVP; separate tab printing in Phase 3
+   - **Owner:** Product
+
+4. **Deep Linking:** Should tabs be accessible via URL hash (e.g., `/analysis/123#job-description`)?
+   - **Recommendation:** Not in Phase 2; add in Phase 3 if users share specific tabs
+   - **Owner:** Backend Developer + Product
+
+---
+
 ### Feature 5: Analysis History
 
 **Description:** Store and retrieve past analyses for tracking improvements.
@@ -616,8 +870,13 @@ Phase 2 introduces **session-based user identification** without authentication:
 ```json
 {
   "id": "string (UUID)",
-  "cv_id": "string (UUID reference)",
-  "job_id": "string (UUID reference)",
+  "user_id": "string (session UUID)",
+  "cv_id": "string (UUID reference)",  // DEPRECATED - keeping for backward compatibility
+  "job_id": "string (UUID reference)",  // DEPRECATED - keeping for backward compatibility
+  "cv_markdown": "string (full CV content)",  // NEW - stored with analysis for historical consistency
+  "job_description": "string (full job text)",  // NEW - stored with analysis for historical consistency
+  "source_type": "manual | linkedin_url",  // NEW - job input method
+  "source_url": "string (optional, LinkedIn URL)",  // NEW - if source_type is linkedin_url
   "overall_score": "integer (1-100)",
   "analyzed_at": "datetime (ISO 8601)",
   "analysis_results": {
@@ -652,6 +911,13 @@ Phase 2 introduces **session-based user identification** without authentication:
   }
 }
 ```
+
+**Rationale for Storing CV and Job Content with Analysis:**
+- **Data Completeness:** Ensures historical analyses are self-contained with all necessary context
+- **User Experience:** Enables users to view what CV and job description they analyzed in the past without referencing separate documents
+- **Simplified Frontend:** Single API call returns all data needed for the 3-tab interface (CV, Job, Results)
+- **Future-Proof:** Supports data export, multi-device access, and archival features
+- **Consistency:** Current and historical analyses have identical data structure
 
 ---
 
@@ -1127,6 +1393,10 @@ OR
 Response: 200 OK (for sync processing)
 {
   "analysis_id": "uuid",
+  "cv_markdown": "string (full CV content)",  // NEW - enables CV tab display
+  "job_description": "string (full job text)",  // NEW - enables Job Description tab display
+  "source_type": "manual | linkedin_url",  // NEW - indicates job input method
+  "source_url": "string (optional)",  // NEW - LinkedIn URL if applicable
   "overall_score": 75,
   "summary": {...},
   "recommendations": [...]
@@ -1140,8 +1410,12 @@ GET /api/v1/analyses/{analysis_id}
 Response: 200 OK
 {
   "analysis_id": "uuid",
-  "cv_id": "uuid",
-  "job_id": "uuid",
+  "cv_id": "uuid",  // DEPRECATED - keeping for backward compatibility
+  "job_id": "uuid",  // DEPRECATED - keeping for backward compatibility
+  "cv_markdown": "string (full CV content)",  // NEW - for CV tab display
+  "job_description": "string (full job text)",  // NEW - for Job Description tab display
+  "source_type": "manual | linkedin_url",  // NEW - job input method
+  "source_url": "string (optional)",  // NEW - LinkedIn URL if applicable
   "overall_score": 75,
   "analyzed_at": "datetime",
   "subscores": {...},

@@ -104,8 +104,12 @@ class AnalysisDocument(BaseCosmosDocument):
     """Analysis result document model for Cosmos DB."""
 
     type: DocumentType = Field(default=DocumentType.ANALYSIS, description="Document type (analysis)")
-    cvId: str = Field(..., description="Reference to CV document ID")
-    jobId: str = Field(..., description="Reference to job document ID")
+    cvId: str = Field(default="", description="Reference to CV document ID (deprecated, use cvMarkdown)")
+    jobId: str = Field(default="", description="Reference to job document ID (deprecated, use jobDescription)")
+    cvMarkdown: str = Field(..., description="Full CV content in Markdown format")
+    jobDescription: str = Field(..., description="Full job description text")
+    sourceType: str = Field(default="manual", description="Job source type: manual or linkedin_url")
+    sourceUrl: Optional[str] = Field(default=None, description="LinkedIn URL if job was scraped")
     overallScore: float = Field(..., ge=0.0, le=100.0, description="Overall match score (0-100)")
     skillMatches: list[SkillMatch] = Field(default_factory=list, description="Skill matching results")
     experienceMatch: dict[str, Any] = Field(default_factory=dict, description="Experience match data")

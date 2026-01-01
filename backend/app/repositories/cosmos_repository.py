@@ -212,18 +212,26 @@ class CosmosDBRepository(AnalysisRepository):
     async def create_analysis(
         self,
         user_id: str,
-        cv_id: str,
-        job_id: str,
+        cv_markdown: str,
+        job_description: str,
+        source_type: str,
+        source_url: Optional[str],
         result: AnalysisResult,
+        cv_id: str = "",
+        job_id: str = "",
     ) -> str:
         """
-        Create a complete analysis document with CV and job references.
+        Create a complete analysis document with CV and job content.
         
         Args:
             user_id: User ID (partition key)
-            cv_id: CV document ID
-            job_id: Job document ID
+            cv_markdown: Full CV content in Markdown
+            job_description: Full job description text
+            source_type: Job source type (manual or linkedin_url)
+            source_url: LinkedIn URL if applicable
             result: Analysis result
+            cv_id: CV document ID (deprecated, optional)
+            job_id: Job document ID (deprecated, optional)
             
         Returns:
             Analysis document ID
@@ -233,6 +241,10 @@ class CosmosDBRepository(AnalysisRepository):
             userId=user_id,
             cvId=cv_id,
             jobId=job_id,
+            cvMarkdown=cv_markdown,
+            jobDescription=job_description,
+            sourceType=source_type,
+            sourceUrl=source_url,
             overallScore=result.overall_score,
             skillMatches=[match.model_dump() for match in result.skill_matches],
             experienceMatch=result.experience_match,

@@ -45,6 +45,10 @@ interface AppState {
   failAnalysis: (error: string) => void;
   clearAnalysis: () => void;
 
+  // Tab state
+  activeTab: string;
+  setActiveTab: (tabId: string) => void;
+
   // UI state
   currentView: 'upload' | 'results' | 'history';
   setCurrentView: (view: 'upload' | 'results' | 'history') => void;
@@ -161,6 +165,24 @@ export const useAppStore = create<AppState>()(
             result: null,
           },
         }),
+
+      // Tab state (persisted in sessionStorage)
+      activeTab: (() => {
+        try {
+          return sessionStorage.getItem('cv-checker-active-tab') || 'analysis-results';
+        } catch {
+          return 'analysis-results';
+        }
+      })(),
+
+      setActiveTab: (tabId) => {
+        try {
+          sessionStorage.setItem('cv-checker-active-tab', tabId);
+        } catch {
+          // Ignore sessionStorage errors
+        }
+        set({ activeTab: tabId });
+      },
 
       // UI state
       currentView: 'upload',
