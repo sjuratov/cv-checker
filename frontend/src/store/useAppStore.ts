@@ -15,6 +15,8 @@ interface CVData {
 interface JobData {
   description: string;
   lastModified: string | null;
+  sourceType: 'manual' | 'linkedin_url';
+  sourceUrl: string | null;
 }
 
 interface AnalysisState {
@@ -31,7 +33,9 @@ interface AppState {
 
   // Job description state
   currentJob: JobData;
-  updateJobDescription: (description: string) => void;
+  jobInputMode: 'manual' | 'linkedin_url';
+  setJobInputMode: (mode: 'manual' | 'linkedin_url') => void;
+  updateJobDescription: (description: string, sourceType?: 'manual' | 'linkedin_url', sourceUrl?: string | null) => void;
   clearJob: () => void;
 
   // Analysis state
@@ -83,13 +87,24 @@ export const useAppStore = create<AppState>()(
       currentJob: {
         description: '',
         lastModified: null,
+        sourceType: 'manual',
+        sourceUrl: null,
       },
 
-      updateJobDescription: (description) =>
+      jobInputMode: 'manual',
+
+      setJobInputMode: (mode) =>
+        set({
+          jobInputMode: mode,
+        }),
+
+      updateJobDescription: (description, sourceType = 'manual', sourceUrl = null) =>
         set({
           currentJob: {
             description,
             lastModified: new Date().toISOString(),
+            sourceType,
+            sourceUrl,
           },
         }),
 
@@ -98,6 +113,8 @@ export const useAppStore = create<AppState>()(
           currentJob: {
             description: '',
             lastModified: null,
+            sourceType: 'manual',
+            sourceUrl: null,
           },
         }),
 

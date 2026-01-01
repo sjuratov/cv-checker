@@ -85,8 +85,8 @@ Return ONLY valid JSON, no additional text."""
             # Validate required fields
             required_fields = ["job_title", "required_skills", "required_years", "role_type"]
             for field in required_fields:
-                if field not in parsed_data:
-                    logger.warning(f"Missing required field: {field}, adding default")
+                if field not in parsed_data or parsed_data.get(field) is None:
+                    logger.warning(f"Missing or null field: {field}, adding default")
                     if field == "required_skills":
                         parsed_data[field] = []
                     elif field == "required_years":

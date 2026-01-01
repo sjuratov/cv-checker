@@ -118,7 +118,9 @@ class DeterministicScorer:
             Tuple of (alignment_percentage, gaps_explanation)
         """
         gaps = {}
-
+        # Handle None values - convert to 0
+        required_years = required_years if required_years is not None else 0
+        candidate_years = candidate_years if candidate_years is not None else 0
         if candidate_years >= required_years:
             # Over-qualified: 100% if within 2x requirement
             if candidate_years <= required_years * 2:

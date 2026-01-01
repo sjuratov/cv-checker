@@ -65,7 +65,9 @@ CV Checker addresses these challenges by:
 
 **Usage Pattern:**
 - Uploads CV once
-- Tests against 5-10 different job postings per week
+- Browses LinkedIn for relevant job postings
+- Copies LinkedIn job URLs (5-10 per week) and pastes into CV Checker
+- Reviews analysis results and recommendations
 - Iterates CV based on recommendations
 - Re-tests to validate improvements
 
@@ -184,21 +186,121 @@ CV Checker addresses these challenges by:
   - Metadata: submission timestamp, character count, source type
   - Retrievable by job ID
 
-**FR2.3** - Job Description Preprocessing
+**FR2.3** - Job Description Preprocessing & Validation
 - **Priority:** P1 (Should Have)
-- **Description:** Clean and normalize job description text
+- **Description:** Clean, normalize, and validate job description text
 - **Acceptance Criteria:**
   - Remove excessive whitespace
   - Standardize formatting
   - Extract key sections (responsibilities, requirements, nice-to-have)
   - Handle various input formats gracefully
+  - Validate minimum content length (50 characters for manual input)
+  - For LinkedIn-scraped content: accept any length >0, log warning if <50
+  - Reject empty or whitespace-only content with clear error message
 
-**FR2.4** - LinkedIn URL Scraping (Future)
-- **Priority:** P3 (Won't Have - Phase 3)
-- **Description:** Extract job descriptions from LinkedIn URLs
+**FR2.4** - LinkedIn URL Fetching
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Extract job descriptions from LinkedIn job posting URLs
 - **Acceptance Criteria:**
-  - Out of scope for Phase 1 & 2
-  - Future enhancement for Phase 3
+  - Backend endpoint accepts LinkedIn job URLs
+  - Server-side scraping using Playwright (headless browser)
+  - Returns raw job description text content
+  - Validates LinkedIn URL format before attempting fetch
+  - Handles errors gracefully: invalid URLs, network timeouts, blocked requests
+  - No structured data extraction in scraper (Job Parser Agent handles that)
+  - Returns appropriate error messages for scraping failures
+
+**FR2.5** - Dual Input Mode UI
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Allow users to toggle between LinkedIn URL and manual text input
+- **Acceptance Criteria:**
+  - Toggle control to switch between "LinkedIn URL" and "Manual Input" modes
+  - In LinkedIn URL mode: single text input for URL with "Fetch" action
+  - In Manual Input mode: textarea for job description (existing functionality)
+  - Auto-populate job description field once LinkedIn content is fetched
+  - Clear visual feedback during fetch operation (loading state)
+  - Error display for failed fetch attempts with actionable guidance
+  - Seamless fallback to manual input if fetch fails
+
+---
+
+### Feature 2B: LinkedIn Job URL Fetching (Phase 2)
+
+**Description:** Automated extraction of job descriptions from LinkedIn URLs to streamline job input.
+
+**User Story:**
+> As a job seeker, I want to paste a LinkedIn job URL instead of manually copying the entire job description, so that I can quickly analyze multiple jobs without tedious copy-paste work.
+
+**Requirements:**
+
+**FR2B.1** - LinkedIn URL Validation
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Validate LinkedIn URLs before fetching
+- **Acceptance Criteria:**
+  - Accept URLs matching pattern: `https://www.linkedin.com/jobs/view/*` or `https://linkedin.com/jobs/view/*`
+  - Reject non-LinkedIn URLs with clear error message
+  - Handle URL variations (with/without www, trailing slashes, query parameters)
+  - Return validation errors before attempting fetch
+
+**FR2B.2** - Server-Side Web Scraping
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Use Playwright to scrape LinkedIn job content
+- **Acceptance Criteria:**
+  - Run Playwright in headless mode on backend
+  - Navigate to LinkedIn job URL
+  - Extract raw job description text (no HTML parsing in scraper)
+  - Accept any content length >0 characters
+  - Log warning if content <50 characters (unusually short)
+  - Timeout after 15 seconds with appropriate error
+  - Return plain text content for Job Parser Agent to process
+  - Rate limit: 5 requests/minute per IP, 20 requests/hour per IP (Phase 2 - no user authentication)
+
+**FR2B.3** - Error Handling & Fallback
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Graceful degradation when LinkedIn fetch fails
+- **Acceptance Criteria:**
+  - Handle network timeouts (15s max)
+  - Handle LinkedIn anti-scraping blocks (CAPTCHA, rate limits)
+  - Handle invalid/deleted job postings (404)
+  - Return user-friendly error messages
+  - Suggest manual input as fallback
+  - Log failure reasons for monitoring
+
+**FR2B.4** - Separation of Concerns
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Scraper only retrieves raw text; structured extraction handled by Job Parser Agent
+- **Acceptance Criteria:**
+  - Scraper returns unstructured job description text
+  - No extraction of job title, skills, requirements in scraper
+  - Job Parser Agent receives same input format as manual text
+  - Consistent downstream processing regardless of input source
+
+**Technical Design Notes:**
+
+**Why Playwright?**
+- Handles JavaScript-rendered content (LinkedIn is a SPA)
+- Stealth mode reduces detection by anti-scraping systems
+- Headless browser ensures accurate rendering
+- Cross-platform support (dev, staging, prod)
+
+**Deployment Considerations:**
+- Azure Container Apps recommended (supports headless browsers)
+- Alternative: Azure App Service with custom Docker image including Playwright
+- Resource requirements: ~512MB RAM per concurrent scraping operation
+- Consider rate limiting to avoid LinkedIn blocks (max 10 requests/minute)
+
+**Error Scenarios:**
+1. **Invalid URL:** Immediate validation error, no fetch attempted
+2. **Network Timeout:** Retry once, then return timeout error
+3. **LinkedIn Block:** Return blocked error, suggest manual input
+4. **Job Not Found (404):** Return not found error, suggest checking URL
+5. **Content Extraction Failed:** Return generic error, suggest manual input
+
+**Privacy & Legal:**
+- User provides URL; we fetch publicly accessible content
+- No LinkedIn authentication required (public job postings only)
+- Scraped content stored same as manual input (per data retention policy)
+- Terms of Service should clarify user responsibility for URL legality
 
 ---
 
@@ -368,6 +470,7 @@ CV Checker addresses these challenges by:
 - **Agent Framework:** Microsoft Agent Framework
 - **AI Service:** Azure OpenAI (GPT-4o)
 - **Database:** Azure Cosmos DB (NoSQL)
+- **Web Scraping:** Playwright (headless browser) - Phase 2
 - **Hosting:** Azure App Service / Container Apps
 - **API Design:** RESTful with OpenAPI documentation
 
@@ -405,8 +508,11 @@ CV Checker addresses these challenges by:
   "id": "string (UUID)",
   "content": "string (plain text)",
   "source_type": "manual | linkedin_url",
+  "source_url": "string (optional, LinkedIn URL if applicable)",
   "submitted_at": "datetime (ISO 8601)",
   "character_count": "integer",
+  "fetch_status": "success | failed | not_applicable",
+  "fetch_error": "string (optional, error message if fetch failed)",
   "parsed_data": {
     "title": "string",
     "required_skills": ["string"],
@@ -857,17 +963,54 @@ Response: 201 Created
 POST /api/v1/jobs
 Content-Type: application/json
 
-Request:
+Request (Manual Input):
 {
-  "content": "string (job description text)",
-  "source_type": "manual"
+  "source_type": "manual",
+  "content": "string (job description text)"
 }
 
-Response: 201 Created
+Request (LinkedIn URL):
+{
+  "source_type": "linkedin_url",
+  "url": "string (LinkedIn job posting URL)"
+}
+
+Response: 201 Created (Manual Input)
 {
   "job_id": "uuid",
   "submitted_at": "datetime",
-  "character_count": 2048
+  "content": "string (job description)",
+  "character_count": 2048,
+  "source_type": "manual",
+  "fetch_status": "not_applicable"
+}
+
+Response: 200 OK (LinkedIn URL - Success)
+{
+  "job_id": "uuid",
+  "submitted_at": "datetime",
+  "content": "string (scraped job description)",
+  "character_count": 1543,
+  "source_type": "linkedin_url",
+  "source_url": "https://linkedin.com/jobs/view/123",
+  "fetch_status": "success"
+}
+
+Response: 400 Bad Request (LinkedIn fetch failed)
+{
+  "success": false,
+  "error": "failed_to_fetch",
+  "message": "Unable to fetch content from LinkedIn URL",
+  "details": "Request timeout after 15 seconds",
+  "fallback": "manual_input"
+}
+
+Response: 400 Bad Request (Invalid content)
+{
+  "success": false,
+  "error": "invalid_content",
+  "message": "Job description is too short (minimum 50 characters required)",
+  "details": "Received 23 characters"
 }
 ```
 
@@ -945,11 +1088,13 @@ Response: 200 OK
 1. **User Engagement**
    - Target: 70% of users who upload a CV complete at least one analysis
    - Target: 40% of users perform 3+ analyses within first month
-   - Measurement: Track analysis completion rate, repeat usage
+   - Target: 50% of job inputs use LinkedIn URL mode (Phase 2)
+   - Measurement: Track analysis completion rate, repeat usage, input mode preferences
 
 2. **User Satisfaction**
    - Target: Net Promoter Score (NPS) ≥ 40
    - Target: 75% of users rate recommendations as "helpful" or "very helpful"
+   - Target: 80% of users find LinkedIn URL fetching "convenient" or "very convenient" (Phase 2)
    - Measurement: Post-analysis surveys, feedback forms
 
 3. **Utility & Impact**
@@ -974,7 +1119,9 @@ Response: 200 OK
    - Target: <1% error rate on analyses
    - Target: Successful agent orchestration in 99% of requests
    - Target: Data consistency across all Azure Cosmos DB operations
-   - Measurement: Error logs, agent execution telemetry
+   - Target: ≥90% success rate for LinkedIn URL fetching (Phase 2)
+   - Target: LinkedIn fetch operations complete within 15 seconds (Phase 2)
+   - Measurement: Error logs, agent execution telemetry, scraping success rates
 
 4. **Scalability**
    - Target: Support 100 concurrent analyses
@@ -1058,16 +1205,35 @@ Response: 200 OK
 - [ ] Priority indicators (high, medium, low)
 - [ ] Expandable recommendation details
 
-**AC2.4 - Analysis History**
+**AC2.4 - LinkedIn URL Fetching**
+- [ ] Backend endpoint accepts LinkedIn job URLs
+- [ ] Playwright successfully scrapes LinkedIn job descriptions
+- [ ] Fetch completes within 15 seconds for 90% of requests
+- [ ] Error handling for invalid URLs, timeouts, and blocked requests
+- [ ] Scraped content automatically passed to Job Parser Agent
+- [ ] No structured parsing in scraper (separation of concerns maintained)
+
+**AC2.5 - Dual Input Mode UI**
+- [ ] Toggle control switches between "LinkedIn URL" and "Manual Input" modes
+- [ ] LinkedIn URL mode: text input + fetch button
+- [ ] Manual Input mode: textarea (existing functionality)
+- [ ] Loading indicator during fetch operation
+- [ ] Auto-populate job description after successful fetch
+- [ ] Clear error messages with fallback guidance
+- [ ] Seamless mode switching without data loss
+
+**AC2.6 - Analysis History**
 - [ ] List previous analyses for a CV
 - [ ] View past analysis details
 - [ ] Compare scores across analyses
 - [ ] Sort/filter by date or score
+- [ ] Display source type (manual vs LinkedIn URL) for each job
 
-**AC2.5 - Usability Testing**
+**AC2.7 - Usability Testing**
 - [ ] 5+ users complete full workflow without assistance
 - [ ] Task success rate >90% (upload, analyze, review)
 - [ ] Average time to first analysis <5 minutes
+- [ ] LinkedIn URL fetch success rate >85% in user testing
 - [ ] User satisfaction survey score ≥4/5
 
 ---
@@ -1127,10 +1293,10 @@ The following features are explicitly **NOT included** in the initial product:
    - No DOCX parsing (Phase 1 & 2)
    - Markdown only initially
 
-4. **Job Description Scraping**
-   - No LinkedIn URL scraping (Phase 1 & 2)
-   - No Indeed, Glassdoor, or other site scraping
-   - Manual paste only initially
+4. **Job Description Scraping (Phase 1 Only)**
+   - No LinkedIn URL scraping in Phase 1 (added in Phase 2)
+   - No Indeed, Glassdoor, or other site scraping (Phase 1 & 2)
+   - Manual paste only in Phase 1
 
 5. **CV Generation/Editing**
    - No in-app CV editor
@@ -1173,9 +1339,10 @@ These features may be considered after Phase 2 based on user feedback and busine
 - Interview preparation based on CV-job gaps
 - Company culture fit analysis
 - Salary expectation recommendations
-- Browser extension for one-click analysis on job sites
+- Browser extension for one-click analysis on job sites (LinkedIn + other boards)
 - API access for third-party integrations
 - White-label solution for recruitment agencies
+- Additional job board URL fetching (Indeed, Glassdoor, etc.)
 
 ---
 
@@ -1212,12 +1379,13 @@ These features may be considered after Phase 2 based on user feedback and busine
 ---
 
 ### Phase 2: Frontend & User Experience (Weeks 7-10)
-**Goal:** Build user-facing interface with AG-UI for seamless interaction.
+**Goal:** Build user-facing interface with AG-UI for seamless interaction, including LinkedIn URL fetching.
 
 **Deliverables:**
 - AG-UI frontend application
 - CV upload interface
-- Job description input interface
+- Dual-mode job input interface (LinkedIn URL + Manual)
+- LinkedIn URL fetching backend service (Playwright)
 - Analysis results visualization
 - Analysis history view
 - Responsive design
@@ -1227,17 +1395,22 @@ These features may be considered after Phase 2 based on user feedback and busine
 - All Phase 2 acceptance criteria met
 - Usability testing with 5+ users (>90% task success)
 - Average time to first analysis <5 minutes
+- LinkedIn URL fetch success rate >90%
 - Mobile-responsive design
 
 **Risks:**
 - AG-UI learning curve
 - Frontend-backend integration issues
 - Performance on slow connections
+- LinkedIn anti-scraping measures blocking requests
+- Playwright deployment complexity in Azure
 
 **Mitigation:**
 - Allocate time for AG-UI exploration
 - Use OpenAPI auto-generated client
 - Optimize API responses (minimize payload size)
+- Implement robust error handling and fallback to manual input
+- Test Playwright in Azure environment early; use browser-in-container approach
 
 ---
 
@@ -1246,15 +1419,16 @@ These features may be considered after Phase 2 based on user feedback and busine
 
 **Deliverables:**
 - PDF and DOCX CV parsing
-- LinkedIn URL scraping
 - User authentication and accounts
 - Advanced analytics (progress tracking)
 - Export features (PDF, JSON)
+- Additional job board integrations (Indeed, Glassdoor)
 
 **Success Criteria:**
 - User retention increases by 25%
 - Multi-format parsing accuracy >90%
 - Authentication implemented securely
+- Support for 3+ job board sources
 
 **Timing:**
 - TBD based on Phase 2 learnings and user demand
@@ -1311,6 +1485,7 @@ These features may be considered after Phase 2 based on user feedback and busine
 | Cosmos DB partitioning issues | Medium | Low | Design flexible schema; test at scale early; consult Azure experts |
 | CV parsing accuracy (varied formats) | High | Medium | Start with Markdown only; expand formats in Phase 3; validate with real CVs |
 | Analysis quality (inaccurate scores) | High | Medium | Validate against recruiter assessments; iteratively refine prompts; A/B test |
+| LinkedIn anti-scraping blocks requests | Medium | High | Implement retry logic; headless browser with stealth mode; fallback to manual input; monitor success rates |
 
 ### Business Risks
 
@@ -1360,6 +1535,14 @@ These features may be considered after Phase 2 based on user feedback and busine
 7. **Beta Testing:** Who are our initial beta users? How do we recruit them?
    - **Owner:** Product + Marketing
    - **Deadline:** Week 4
+
+8. **Playwright Deployment:** What's the best approach for deploying Playwright in Azure? (Container Apps vs App Service with custom runtime)
+   - **Owner:** DevOps Engineer
+   - **Deadline:** Week 6 (before Phase 2)
+
+9. **LinkedIn Scraping Reliability:** What's acceptable success rate for LinkedIn fetching? Should we implement rate limiting?
+   - **Owner:** Backend Developer + Product
+   - **Deadline:** Week 7
 
 ---
 

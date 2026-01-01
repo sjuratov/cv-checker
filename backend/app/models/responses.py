@@ -1,6 +1,6 @@
 """API response models."""
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -130,6 +130,72 @@ class HealthCheckResponse(BaseModel):
                 "version": "1.0.0",
                 "service": "cv-checker-api",
                 "azure_openai": "connected",
+            }
+        }
+    }
+
+
+class JobSubmissionResponse(BaseModel):
+    """Response model for job submission."""
+
+    job_id: str = Field(description="Unique job identifier")
+    content: str = Field(description="Job description content")
+    source_type: Literal["manual", "linkedin_url"] = Field(
+        description="Source type of the job description"
+    )
+    source_url: Optional[str] = Field(
+        default=None,
+        description="Source URL (for linkedin_url type)",
+    )
+    fetch_status: Literal["success", "not_applicable"] = Field(
+        description="Fetch status for LinkedIn scraping"
+    )
+    character_count: int = Field(description="Character count of the content")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "job_id": "550e8400-e29b-41d4-a716-446655440001",
+                    "content": "We are seeking a Senior Python Developer...",
+                    "source_type": "manual",
+                    "source_url": None,
+                    "fetch_status": "not_applicable",
+                    "character_count": 1543,
+                },
+                {
+                    "job_id": "550e8400-e29b-41d4-a716-446655440002",
+                    "content": "About the job\n\nWe are looking for a talented...",
+                    "source_type": "linkedin_url",
+                    "source_url": "https://www.linkedin.com/jobs/view/123456789/",
+                    "fetch_status": "success",
+                    "character_count": 2341,
+                },
+            ]
+        }
+    }
+
+
+class JobSubmissionErrorResponse(BaseModel):
+    """Error response for job submission failures."""
+
+    success: bool = Field(default=False, description="Success status")
+    error: str = Field(description="Error type/code")
+    message: str = Field(description="Human-readable error message")
+    details: Optional[str] = Field(default=None, description="Additional error details")
+    fallback: str = Field(
+        default="manual_input",
+        description="Suggested fallback method",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "success": False,
+                "error": "scraping_failed",
+                "message": "Failed to fetch job description. Please try manual input.",
+                "details": "Request timeout after 15 seconds",
+                "fallback": "manual_input",
             }
         }
     }

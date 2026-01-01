@@ -1,6 +1,7 @@
 """FastAPI application for CV Checker."""
 
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from time import time
 
@@ -8,19 +9,32 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app import __version__
 from app.config import Settings, get_settings
-from app.models.requests import AnalyzeRequest
+from app.models.requests import AnalyzeRequest, JobSubmissionRequest
 from app.models.responses import (
     AnalyzeResponse,
     ErrorResponse,
     HealthCheckResponse,
+    JobSubmissionErrorResponse,
+    JobSubmissionResponse,
     SkillMatchResponse,
 )
 from app.repositories.analysis import AnalysisRepository, InMemoryAnalysisRepository
 from app.services.cv_checker import CVCheckerService
+from app.services.linkedin_scraper import (
+    AntiBotDetected,
+    ContentNotFound,
+    LinkedInScraperError,
+    LinkedInScraperService,
+    PageLoadTimeout,
+)
 from app.utils.azure_openai import get_openai_client
+from app.utils.linkedin_validator import is_valid_linkedin_job_url
 
 # Configure logging
 logging.basicConfig(
@@ -28,6 +42,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -43,11 +60,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.app_env}")
     logger.info(f"Log level: {settings.log_level}")
     logger.info(f"Azure OpenAI endpoint: {settings.azure_openai_endpoint}")
+    
+    # Initialize LinkedIn scraper service (global instance)
+    app.state.linkedin_scraper = LinkedInScraperService()
+    await app.state.linkedin_scraper.initialize()
+    logger.info("LinkedIn scraper service initialized")
 
     yield
 
     # Shutdown
     logger.info("CV Checker API shutting down...")
+    if hasattr(app.state, 'linkedin_scraper'):
+        await app.state.linkedin_scraper.close()
+        logger.info("LinkedIn scraper service closed")
 
 
 # Create FastAPI application
@@ -64,6 +89,10 @@ app = FastAPI(
 # Get settings
 settings = get_settings()
 
+
+# Add rate limiter state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Configure CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -82,6 +111,19 @@ def get_repository() -> AnalysisRepository:
     Returns in-memory repo for v1, will return Cosmos repo for v2+.
     """
     return InMemoryAnalysisRepository()
+
+
+def get_linkedin_scraper(request: Request) -> LinkedInScraperService:
+    """
+    Get LinkedIn scraper service from app state.
+    
+    Args:
+        request: FastAPI request object
+        
+    Returns:
+        LinkedInScraperService instance
+    """
+    return request.app.state.linkedin_scraper
 
 
 def get_service(
@@ -183,6 +225,165 @@ async def health_check() -> HealthCheckResponse:
         service="cv-checker-api",
         azure_openai=azure_openai_status
     )
+
+
+@app.post(
+    "/api/v1/jobs",
+    response_model=JobSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit job description",
+    description="Submit job description via manual text or LinkedIn URL. Rate limit: 5/min, 20/hour per IP (LinkedIn URLs only).",
+    responses={
+        201: {
+            "description": "Job submitted successfully",
+            "model": JobSubmissionResponse,
+        },
+        400: {
+            "description": "Invalid request or scraping failed",
+            "model": JobSubmissionErrorResponse,
+        },
+        429: {
+            "description": "Rate limit exceeded (LinkedIn URLs only)",
+            "model": ErrorResponse,
+        },
+    },
+    tags=["Jobs"],
+)
+@limiter.limit("5/minute;20/hour", methods=["POST"], error_message="Too many LinkedIn scraping requests. Please try again later.")
+async def submit_job(
+    request: Request,
+    job_request: JobSubmissionRequest,
+    scraper: LinkedInScraperService = Depends(get_linkedin_scraper),
+) -> JobSubmissionResponse:
+    """
+    Submit job description (manual text or LinkedIn URL).
+    
+    **Manual Input Mode:**
+    - Provide `source_type: "manual"` and `content` with job description text
+    - Minimum 50 characters required
+    - No rate limiting applied
+    
+    **LinkedIn URL Mode:**
+    - Provide `source_type: "linkedin_url"` and `url` with LinkedIn job posting URL
+    - Server-side scraping using Playwright
+    - Rate limited to 5 requests/minute, 20 requests/hour per IP
+    - Returns content directly (no database storage in Phase 2)
+    
+    Args:
+        request: FastAPI request object
+        job_request: Job submission request (manual or LinkedIn URL)
+        scraper: LinkedIn scraper service
+        
+    Returns:
+        JobSubmissionResponse with job ID and content
+        
+    Raises:
+        HTTPException: On validation or scraping errors
+    """
+    # Manual Input Mode
+    if job_request.source_type == "manual":
+        content = job_request.content
+        
+        logger.info(f"Manual job submission - {len(content)} characters")
+        
+        return JobSubmissionResponse(
+            job_id=str(uuid.uuid4()),
+            content=content,
+            source_type="manual",
+            source_url=None,
+            fetch_status="not_applicable",
+            character_count=len(content),
+        )
+    
+    # LinkedIn URL Mode
+    elif job_request.source_type == "linkedin_url":
+        url = job_request.url
+        
+        # Validate LinkedIn URL format
+        if not is_valid_linkedin_job_url(url):
+            logger.warning(f"Invalid LinkedIn URL format: {url}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "invalid_url",
+                    "message": "Invalid LinkedIn job URL. Expected format: https://linkedin.com/jobs/view/[ID]",
+                    "fallback": "manual_input",
+                },
+            )
+        
+        try:
+            logger.info(f"Scraping LinkedIn job from URL: {url}")
+            content = await scraper.scrape_job_description(url)
+            
+            # Log warning if content is unusually short (but don't reject)
+            if len(content) < 50:
+                logger.warning(
+                    f"Short LinkedIn content scraped: {len(content)} chars from {url}"
+                )
+            
+            logger.info(f"Successfully scraped {len(content)} characters from {url}")
+            
+            return JobSubmissionResponse(
+                job_id=str(uuid.uuid4()),
+                content=content,
+                source_type="linkedin_url",
+                source_url=url,
+                fetch_status="success",
+                character_count=len(content),
+            )
+        
+        except PageLoadTimeout as e:
+            logger.warning(f"Scraping timeout for {url}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "timeout",
+                    "message": "Request timeout after 15 seconds. The job posting may not be available.",
+                    "details": str(e),
+                    "fallback": "manual_input",
+                },
+            )
+        
+        except ContentNotFound as e:
+            logger.warning(f"Content not found for {url}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "content_not_found",
+                    "message": "Job description not found. The posting may have been removed or URL is incorrect.",
+                    "details": str(e),
+                    "fallback": "manual_input",
+                },
+            )
+        
+        except AntiBotDetected as e:
+            logger.error(f"Anti-bot detected for {url}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "anti_bot_detected",
+                    "message": "Unable to access LinkedIn at this time. Please try again later or use manual input.",
+                    "details": str(e),
+                    "fallback": "manual_input",
+                },
+            )
+        
+        except LinkedInScraperError as e:
+            logger.error(f"Scraping failed for {url}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "success": False,
+                    "error": "scraping_failed",
+                    "message": "Failed to fetch job description. Please try manual input.",
+                    "details": str(e),
+                    "fallback": "manual_input",
+                },
+            )
 
 
 @app.post(
