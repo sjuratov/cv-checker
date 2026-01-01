@@ -49,7 +49,8 @@ class LinkedInScraperService:
             timeout: Maximum time to wait for page load and selectors (milliseconds)
         """
         self.browser: Optional[Browser] = None
-        self.playwright = None
+        self._playwright = None
+        self._playwright_context_manager = None
         self.timeout = timeout
         self.max_retries = 2
         
@@ -64,8 +65,11 @@ class LinkedInScraperService:
         
         logger.info("Initializing Playwright browser")
         try:
-            self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(
+            # Store the context manager to prevent it from being garbage collected
+            self._playwright_context_manager = async_playwright()
+            self._playwright = await self._playwright_context_manager.__aenter__()
+            
+            self.browser = await self._playwright.chromium.launch(
                 headless=True,
                 args=[
                     '--no-sandbox',
@@ -97,19 +101,22 @@ class LinkedInScraperService:
             AntiBotDetected: If LinkedIn anti-bot challenge detected
             LinkedInScraperError: For other scraping failures
         """
-        if not self.browser:
+        # Initialize or verify browser is ready
+        if not self.browser or not self.browser.is_connected():
+            logger.warning("Browser not connected, reinitializing...")
             await self.initialize()
         
         page: Optional[Page] = None
+        context = None
         
         try:
-            page = await self.browser.new_page()
+            # Create a new browser context for isolation
+            context = await self.browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
             
-            # Set user agent and viewport to appear like a real browser
-            await page.set_extra_http_headers({
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            })
-            await page.set_viewport_size({"width": 1920, "height": 1080})
+            page = await context.new_page()
             
             # Navigate to job posting
             logger.info(f"Navigating to LinkedIn job: {url}")
@@ -138,8 +145,11 @@ class LinkedInScraperService:
             raise LinkedInScraperError(f"Failed to scrape LinkedIn job: {e}")
         
         finally:
-            if page:
+            # Clean up page and context
+            if page and not page.is_closed():
                 await page.close()
+            if context:
+                await context.close()
     
     async def _extract_job_description(self, page: Page) -> str:
         """
@@ -228,6 +238,10 @@ class LinkedInScraperService:
         if self.browser:
             await self.browser.close()
             logger.info("Browser closed")
-        if self.playwright:
-            await self.playwright.stop()
+            self.browser = None
+            
+        if self._playwright_context_manager:
+            await self._playwright_context_manager.__aexit__(None, None, None)
             logger.info("Playwright stopped")
+            self._playwright = None
+            self._playwright_context_manager = None
