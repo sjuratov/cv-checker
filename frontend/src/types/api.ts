@@ -9,6 +9,7 @@
 
 export interface AnalyzeRequest {
   cv_markdown: string;
+  cv_filename?: string;
   job_description: string;
 }
 
@@ -61,6 +62,12 @@ export interface AnalysisHistory {
   jobTitle?: string;
   score: number;
   result: AnalyzeResponse;
+}
+
+export interface HistoryResponse {
+  user_id: string;
+  count: number;
+  history: AnalysisHistory[];
 }
 
 // ============================================================================

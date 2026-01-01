@@ -2,14 +2,39 @@
  * Analysis History Component
  */
 
-import { ArrowLeft, FileText, Calendar, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, FileText, Calendar, TrendingUp, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { formatDate, getScoreLabel } from '../../utils/scoring';
+import { api } from '../../lib/api';
+import type { AnalysisHistory } from '../../types/api';
 
 export function AnalysisHistory() {
-  const { history, analysis, setCurrentView, completeAnalysis } = useAppStore();
+  const { analysis, setCurrentView, completeAnalysis } = useAppStore();
+  const [history, setHistory] = useState<AnalysisHistory[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleViewDetails = (historyItem: typeof history[0]) => {
+  // Fetch history from backend on mount
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await api.getHistory('anonymous', 20);
+        setHistory(response.history);
+      } catch (err) {
+        console.error('Failed to fetch history:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load history');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, []);
+
+  const handleViewDetails = (historyItem: AnalysisHistory) => {
     completeAnalysis(historyItem.result);
     setCurrentView('results');
   };
@@ -18,6 +43,55 @@ export function AnalysisHistory() {
     setCurrentView(analysis.result ? 'results' : 'upload');
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="history-container">
+        <div className="history-header">
+          <button className="btn-back" onClick={handleBack}>
+            <ArrowLeft size={20} />
+            Back
+          </button>
+          <h1 className="history-title">Analysis History</h1>
+        </div>
+
+        <div className="empty-state">
+          <Loader2 size={64} className="empty-icon animate-spin" />
+          <h2>Loading history...</h2>
+          <p>Fetching your analysis history from the database.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="history-container">
+        <div className="history-header">
+          <button className="btn-back" onClick={handleBack}>
+            <ArrowLeft size={20} />
+            Back
+          </button>
+          <h1 className="history-title">Analysis History</h1>
+        </div>
+
+        <div className="empty-state">
+          <TrendingUp size={64} className="empty-icon" />
+          <h2>Failed to load history</h2>
+          <p>{error}</p>
+          <button
+            className="btn btn-primary"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
   if (history.length === 0) {
     return (
       <div className="history-container">
@@ -71,6 +145,9 @@ export function AnalysisHistory() {
                   <div className="history-cv">
                     <FileText size={16} />
                     {item.cvFilename}
+                    {item.jobTitle && (
+                      <span className="history-job-title"> • {item.jobTitle}</span>
+                    )}
                   </div>
                 </div>
 

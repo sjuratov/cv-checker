@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear CV Checker Storage</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #4b5563;
+            line-height: 1.6;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            width: 100%;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .success {
+            background: #d1fae5;
+            border: 2px solid #6ee7b7;
+            color: #065f46;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+        .info {
+            background: #f0f9ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear CV Checker Storage</h1>
+        
+        <div class="info">
+            <strong>Why clear storage?</strong><br>
+            If you're seeing a blank page, it may be due to old cached data from previous versions of the app.
+        </div>
+
+        <p>
+            This will clear all locally stored CV Checker data including:
+        </p>
+        <ul>
+            <li>Uploaded CV data</li>
+            <li>Job descriptions</li>
+            <li>Analysis results</li>
+            <li>Navigation state</li>
+        </ul>
+
+        <button onclick="clearStorage()">Clear Storage & Reload</button>
+
+        <div id="success" class="success">
+            ✅ Storage cleared successfully! Reloading app...
+        </div>
+    </div>
+
+    <script>
+        function clearStorage() {
+            // Clear localStorage
+            localStorage.removeItem('cv-checker-storage');
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            
+            // Show success message
+            document.getElementById('success').style.display = 'block';
+            
+            // Redirect to main app after 1.5 seconds
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

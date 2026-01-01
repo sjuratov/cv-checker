@@ -14,6 +14,11 @@ class AnalyzeRequest(BaseModel):
         max_length=50000,
         description="CV content in Markdown format",
     )
+    cv_filename: Optional[str] = Field(
+        default="resume.pdf",
+        max_length=255,
+        description="Original CV filename",
+    )
     job_description: str = Field(
         ...,
         min_length=50,
@@ -33,6 +38,7 @@ class AnalyzeRequest(BaseModel):
         "json_schema_extra": {
             "example": {
                 "cv_markdown": "# John Doe\n\n## Experience\n\n**Senior Python Developer** (2019-2024)\n- Built scalable APIs with FastAPI\n- Deployed to Azure\n\n## Skills\n- Python (5 years)\n- FastAPI\n- Azure",
+                "cv_filename": "john_doe_resume.pdf",
                 "job_description": "We are seeking a Senior Python Developer with 5+ years of experience in building REST APIs using FastAPI and deploying to cloud platforms like Azure.",
             }
         }

@@ -3,6 +3,7 @@
  * Main App Component
  */
 
+import { useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { UploadView } from './components/views/UploadView';
 import { ResultsDisplay } from './components/results/ResultsDisplay';
@@ -10,7 +11,14 @@ import { AnalysisHistory } from './components/history/AnalysisHistory';
 import './App.css';
 
 function App() {
-  const { currentView, analysis } = useAppStore();
+  const { currentView, analysis, setCurrentView } = useAppStore();
+
+  // Ensure we always have a valid currentView on mount
+  useEffect(() => {
+    if (!currentView || !['upload', 'results', 'history'].includes(currentView)) {
+      setCurrentView('upload');
+    }
+  }, [currentView, setCurrentView]);
 
   return (
     <div className="app">

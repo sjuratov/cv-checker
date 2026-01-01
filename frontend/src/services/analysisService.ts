@@ -13,6 +13,7 @@ import { validateCVContent, validateJobDescription, sanitizeText } from '../util
 
 export interface AnalysisInput {
   cvMarkdown: string;
+  cvFilename?: string;
   jobDescription: string;
 }
 
@@ -90,6 +91,7 @@ export class AnalysisService {
       // Step 3: Prepare API request
       const request: AnalyzeRequest = {
         cv_markdown: sanitized.cvMarkdown,
+        cv_filename: input.cvFilename || 'resume.pdf',
         job_description: sanitized.jobDescription,
       };
 

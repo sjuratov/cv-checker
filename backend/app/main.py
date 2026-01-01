@@ -103,17 +103,20 @@ app = FastAPI(
 settings = get_settings()
 
 
-# Add rate limiter state
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-# Configure CORS middleware
+# Configure CORS middleware (must be before other middleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Add rate limiter state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 # Dependency injection
@@ -477,6 +480,7 @@ async def submit_job(
 async def analyze_cv(
     request: AnalyzeRequest,
     service: CVCheckerService = Depends(get_service),
+    cosmos_repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
 ) -> AnalyzeResponse:
     """
     Analyze CV against job description using AI agents.
@@ -490,6 +494,7 @@ async def analyze_cv(
     Args:
         request: AnalyzeRequest with CV and job description
         service: CV Checker service instance
+        cosmos_repository: Cosmos DB repository (optional)
 
     Returns:
         AnalyzeResponse with comprehensive matching results
@@ -505,11 +510,55 @@ async def analyze_cv(
             f"JD length: {len(request.job_description)}"
         )
 
+        # Store CV and Job in Cosmos DB if configured
+        user_id = "anonymous"  # v1 doesn't have auth yet
+        cv_id = ""
+        job_id = ""
+        
+        if cosmos_repository:
+            try:
+                # Store CV with filename
+                cv_id = await cosmos_repository.create_cv(
+                    user_id, 
+                    request.cv_markdown,
+                    filename=request.cv_filename or "resume.pdf"
+                )
+                logger.info(f"Stored CV: {cv_id}")
+                
+                # Store Job (determine source type from request or default to manual)
+                job_id = await cosmos_repository.create_job(
+                    user_id,
+                    request.job_description,
+                    source_type="manual",
+                    source_url=None
+                )
+                logger.info(f"Stored Job: {job_id}")
+            except Exception as e:
+                logger.warning(f"Failed to store CV/Job in Cosmos DB: {e}")
+                # Continue with analysis even if storage fails
+
         # Execute analysis workflow
         analysis_result = await service.analyze_cv(
             cv_markdown=request.cv_markdown,
             job_description=request.job_description,
         )
+
+        # If Cosmos DB is configured and we have CV/Job IDs, create a proper analysis document
+        if cosmos_repository and cv_id and job_id:
+            try:
+                # Create analysis document with CV and Job references
+                analysis_id = await cosmos_repository.create_analysis(
+                    user_id=user_id,
+                    cv_id=cv_id,
+                    job_id=job_id,
+                    result=analysis_result,
+                )
+                logger.info(f"Created analysis document: {analysis_id}")
+                # Update the analysis_result ID to match the Cosmos DB document
+                analysis_result.id = analysis_id
+            except Exception as e:
+                logger.warning(f"Failed to create analysis document in Cosmos DB: {e}")
+                # Analysis result is still valid even if Cosmos DB storage fails
 
         # Convert internal model to API response
         response = AnalyzeResponse(
@@ -757,4 +806,86 @@ async def get_analysis(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get analysis: {str(e)}",
+        )
+
+
+@app.get(
+    "/api/v1/history",
+    summary="Get analysis history",
+    description="Get analysis history with linked CV and Job data for a user",
+    tags=["Analysis"],
+)
+async def get_history(
+    user_id: str = "anonymous",
+    limit: int = 20,
+    repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
+) -> dict:
+    """
+    Get analysis history with linked CV and Job information.
+    
+    Args:
+        user_id: User ID (default: anonymous for v1)
+        limit: Maximum number of results (default: 20)
+        repository: Cosmos DB repository
+        
+    Returns:
+        List of analysis history items with CV and Job data
+    """
+    if not repository:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cosmos DB not configured",
+        )
+    
+    try:
+        # Fetch analyses for the user
+        analyses = await repository.list_analyses(user_id, limit=limit, offset=0)
+        
+        # Build history with linked CV and Job data
+        history_items = []
+        for analysis in analyses:
+            # Fetch CV and Job documents if IDs are available
+            cv_filename = "Unknown CV"
+            job_title = "Unknown Job"
+            
+            if analysis.cvId:
+                cv_doc = await repository.get_cv_by_id(user_id, analysis.cvId)
+                if cv_doc:
+                    cv_filename = cv_doc.filename
+            
+            if analysis.jobId:
+                job_doc = await repository.get_job_by_id(user_id, analysis.jobId)
+                if job_doc:
+                    job_title = job_doc.title
+            
+            history_items.append({
+                "id": analysis.id,
+                "timestamp": analysis.createdAt.isoformat(),
+                "cvFilename": cv_filename,
+                "jobTitle": job_title,
+                "score": analysis.overallScore,
+                "result": {
+                    "analysis_id": analysis.id,
+                    "overall_score": analysis.overallScore,
+                    "skill_matches": analysis.skillMatches,
+                    "experience_match": analysis.experienceMatch,
+                    "education_match": analysis.educationMatch,
+                    "strengths": analysis.strengths,
+                    "gaps": analysis.gaps,
+                    "recommendations": analysis.recommendations,
+                }
+            })
+        
+        logger.info(f"Retrieved {len(history_items)} history items for user: {user_id}")
+        return {
+            "user_id": user_id,
+            "count": len(history_items),
+            "history": history_items,
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to get history: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get history: {str(e)}",
         )

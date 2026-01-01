@@ -11,6 +11,7 @@ import type {
   HealthCheckResponse,
   ErrorResponse,
   APIError,
+  HistoryResponse,
 } from '../types/api';
 
 // ============================================================================
@@ -240,6 +241,38 @@ class CVCheckerAPI {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Get analysis history for a user
+   * @param userId - User ID (default: anonymous)
+   * @param limit - Maximum number of results (default: 20)
+   * @returns History items with CV and Job data
+   * @throws Error on server error or network issue
+   */
+  async getHistory(userId: string = 'anonymous', limit: number = 20): Promise<HistoryResponse> {
+    try {
+      console.log('[API] Fetching analysis history...', {
+        userId,
+        limit,
+      });
+
+      const response = await this.client.get<HistoryResponse>('/api/v1/history', {
+        params: { user_id: userId, limit },
+        timeout: HEALTH_CHECK_TIMEOUT,
+      });
+
+      console.log('[API] History fetched successfully', {
+        count: response.data.count,
+      });
+
+      return response.data;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Failed to fetch history');
     }
   }
 }

@@ -10,7 +10,7 @@ import { Clock } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
 export function UploadView() {
-  const { history, setCurrentView } = useAppStore();
+  const { setCurrentView } = useAppStore();
 
   return (
     <div className="upload-view">
@@ -21,15 +21,13 @@ export function UploadView() {
             AI-powered CV analysis and job matching
           </p>
         </div>
-        {history.length > 0 && (
-          <button
-            className="btn btn-secondary"
-            onClick={() => setCurrentView('history')}
-          >
-            <Clock size={18} />
-            History ({history.length})
-          </button>
-        )}
+        <button
+          className="btn btn-secondary"
+          onClick={() => setCurrentView('history')}
+        >
+          <Clock size={18} />
+          History
+        </button>
       </header>
 
       {/* Backend Connection Status */}

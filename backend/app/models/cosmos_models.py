@@ -41,6 +41,7 @@ class CVDocument(BaseCosmosDocument):
     """CV document model for Cosmos DB."""
 
     type: DocumentType = Field(default=DocumentType.CV, description="Document type (cv)")
+    filename: str = Field(..., description="Original CV filename")
     content: str = Field(..., description="CV content in markdown format")
     characterCount: int = Field(..., description="Character count of CV content")
 
@@ -50,6 +51,7 @@ class CVDocument(BaseCosmosDocument):
                 "id": "cv-550e8400-e29b-41d4-a716-446655440000",
                 "userId": "user-abc123def456",
                 "type": "cv",
+                "filename": "john_doe_resume.pdf",
                 "content": "# John Doe\n\n## Experience\n...",
                 "characterCount": 1543,
                 "createdAt": "2026-01-01T12:00:00Z",
@@ -63,6 +65,7 @@ class JobDocument(BaseCosmosDocument):
     """Job description document model for Cosmos DB."""
 
     type: DocumentType = Field(default=DocumentType.JOB, description="Document type (job)")
+    title: str = Field(..., description="Job title extracted from content")
     content: str = Field(..., description="Job description content")
     sourceType: str = Field(..., description="Source type: manual or linkedin_url")
     sourceUrl: Optional[str] = Field(default=None, description="Source URL if scraped from LinkedIn")
@@ -74,6 +77,7 @@ class JobDocument(BaseCosmosDocument):
                 "id": "job-550e8400-e29b-41d4-a716-446655440001",
                 "userId": "user-abc123def456",
                 "type": "job",
+                "title": "Senior Python Developer",
                 "content": "Senior Python Developer needed...",
                 "sourceType": "linkedin_url",
                 "sourceUrl": "https://www.linkedin.com/jobs/view/123456789/",

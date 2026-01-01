@@ -32,6 +32,7 @@ export function AnalyzeButton() {
       // Call analysis service
       const result = await AnalysisService.analyze({
         cvMarkdown: currentCV.content,
+        cvFilename: currentCV.filename || 'resume.pdf',
         jobDescription: currentJob.description,
       });
 

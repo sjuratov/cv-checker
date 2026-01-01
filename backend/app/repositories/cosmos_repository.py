@@ -75,13 +75,14 @@ class CosmosDBRepository(AnalysisRepository):
         """Generate a unique document ID with prefix."""
         return f"{prefix}-{uuid.uuid4()}"
 
-    async def create_cv(self, user_id: str, content: str) -> str:
+    async def create_cv(self, user_id: str, content: str, filename: str = "resume.pdf") -> str:
         """
         Store a CV document in Cosmos DB.
         
         Args:
             user_id: User ID (partition key)
             content: CV content in markdown
+            filename: Original CV filename
             
         Returns:
             CV document ID
@@ -89,6 +90,7 @@ class CosmosDBRepository(AnalysisRepository):
         cv_doc = CVDocument(
             id=self._generate_id("cv"),
             userId=user_id,
+            filename=filename,
             content=content,
             characterCount=len(content),
         )
@@ -102,7 +104,7 @@ class CosmosDBRepository(AnalysisRepository):
             raise
 
     async def create_job(
-        self, user_id: str, content: str, source_type: str, source_url: Optional[str] = None
+        self, user_id: str, content: str, source_type: str, source_url: Optional[str] = None, title: Optional[str] = None
     ) -> str:
         """
         Store a job description document in Cosmos DB.
@@ -112,13 +114,19 @@ class CosmosDBRepository(AnalysisRepository):
             content: Job description content
             source_type: Source type (manual or linkedin_url)
             source_url: Optional source URL
+            title: Optional job title (extracted if not provided)
             
         Returns:
             Job document ID
         """
+        # Extract title if not provided
+        if not title:
+            title = self._extract_job_title(content, source_url)
+        
         job_doc = JobDocument(
             id=self._generate_id("job"),
             userId=user_id,
+            title=title,
             content=content,
             sourceType=source_type,
             sourceUrl=source_url,
@@ -132,6 +140,35 @@ class CosmosDBRepository(AnalysisRepository):
         except exceptions.CosmosHttpResponseError as e:
             logger.error(f"Failed to create job document: {e}")
             raise
+
+    def _extract_job_title(self, content: str, source_url: Optional[str] = None) -> str:
+        """
+        Extract job title from content or URL.
+        
+        Args:
+            content: Job description content
+            source_url: Optional source URL
+            
+        Returns:
+            Extracted job title
+        """
+        # If LinkedIn URL, extract from URL
+        if source_url and "linkedin.com" in source_url:
+            return f"LinkedIn Job ({source_url.split('/')[-2] if '/' in source_url else 'Unknown'})"
+        
+        # Try to extract first line as title
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        if lines:
+            # First non-empty line is likely the title
+            first_line = lines[0]
+            # Remove markdown formatting
+            title = first_line.strip('#').strip('*').strip()
+            # Limit length
+            if len(title) > 100:
+                title = title[:97] + "..."
+            return title if title else "Job Description"
+        
+        return "Job Description"
 
     async def save(self, result: AnalysisResult) -> str:
         """

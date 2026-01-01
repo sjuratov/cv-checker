@@ -45,15 +45,15 @@ interface AppState {
   failAnalysis: (error: string) => void;
   clearAnalysis: () => void;
 
-  // Analysis history
-  history: AnalysisHistory[];
-  addToHistory: (result: AnalyzeResponse, cvFilename: string) => void;
-  clearHistory: () => void;
-
   // UI state
   currentView: 'upload' | 'results' | 'history';
   setCurrentView: (view: 'upload' | 'results' | 'history') => void;
+
+  // Reset all state
+  resetState: () => void;
 }
+
+const STORAGE_VERSION = 2; // Increment when store structure changes
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -135,25 +135,13 @@ export const useAppStore = create<AppState>()(
         }),
 
       completeAnalysis: (result) =>
-        set((state) => {
-          // Add to history
-          const historyEntry: AnalysisHistory = {
-            id: result.analysis_id,
-            timestamp: new Date().toISOString(),
-            cvFilename: state.currentCV.filename || 'Unknown',
-            score: result.overall_score,
+        set({
+          analysis: {
+            isLoading: false,
+            error: null,
             result,
-          };
-
-          return {
-            analysis: {
-              isLoading: false,
-              error: null,
-              result,
-            },
-            history: [historyEntry, ...state.history].slice(0, 10), // Keep last 10
-            currentView: 'results',
-          };
+          },
+          currentView: 'results',
         }),
 
       failAnalysis: (error) =>
@@ -174,37 +162,52 @@ export const useAppStore = create<AppState>()(
           },
         }),
 
-      // History state
-      history: [],
-
-      addToHistory: (result, cvFilename) =>
-        set((state) => {
-          const historyEntry: AnalysisHistory = {
-            id: result.analysis_id,
-            timestamp: new Date().toISOString(),
-            cvFilename,
-            score: result.overall_score,
-            result,
-          };
-
-          return {
-            history: [historyEntry, ...state.history].slice(0, 10),
-          };
-        }),
-
-      clearHistory: () => set({ history: [] }),
-
       // UI state
       currentView: 'upload',
       setCurrentView: (view) => set({ currentView: view }),
+
+      // Reset all state
+      resetState: () =>
+        set({
+          currentCV: {
+            filename: null,
+            content: null,
+            uploadedAt: null,
+          },
+          currentJob: {
+            description: '',
+            lastModified: null,
+            sourceType: 'manual',
+            sourceUrl: null,
+          },
+          jobInputMode: 'manual',
+          analysis: {
+            isLoading: false,
+            error: null,
+            result: null,
+          },
+          currentView: 'upload',
+        }),
     }),
     {
       name: 'cv-checker-storage',
-      partialize: (state) => ({
-        currentCV: state.currentCV,
-        currentJob: state.currentJob,
-        history: state.history,
-      }),
+      version: STORAGE_VERSION,
+      // Don't persist any state to avoid navigation issues
+      partialize: () => ({}),
+      // Migrate old storage versions
+      migrate: (persistedState: any, version: number) => {
+        if (version < STORAGE_VERSION) {
+          // Clear old state and return defaults
+          return {
+            currentCV: { filename: null, content: null, uploadedAt: null },
+            currentJob: { description: '', lastModified: null, sourceType: 'manual', sourceUrl: null },
+            jobInputMode: 'manual',
+            analysis: { isLoading: false, error: null, result: null },
+            currentView: 'upload',
+          };
+        }
+        return persistedState;
+      },
     }
   )
 );

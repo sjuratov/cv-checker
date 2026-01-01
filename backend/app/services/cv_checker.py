@@ -73,9 +73,7 @@ class CVCheckerService:
                 job_description=job_description,
             )
 
-            # Save (no-op in v1, persists in v2+)
-            analysis_id = await self.repository.save(result)
-            logger.info(f"Analysis completed and saved with ID: {analysis_id}")
+            logger.info(f"Analysis completed with ID: {result.id}")
 
             return result
 
