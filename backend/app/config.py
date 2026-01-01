@@ -30,6 +30,10 @@ class Settings(BaseSettings):
         default="2024-08-01-preview",
         description="Azure OpenAI API version",
     )
+    azure_openai_api_key: Optional[str] = Field(
+        default=None,
+        description="Azure OpenAI API key (if not using Entra ID authentication)",
+    )
 
     # Azure Authentication (optional - for service principal)
     azure_tenant_id: Optional[str] = Field(
@@ -61,6 +65,20 @@ class Settings(BaseSettings):
         description="Comma-separated list of allowed CORS origins",
     )
 
+    # Azure Cosmos DB Configuration (Phase 2)
+    cosmos_connection_string: Optional[str] = Field(
+        default=None,
+        description="Azure Cosmos DB connection string (local emulator or Azure)",
+    )
+    cosmos_database_name: str = Field(
+        default="cv-checker-db",
+        description="Cosmos DB database name",
+    )
+    cosmos_container_name: str = Field(
+        default="cv-checker-data",
+        description="Cosmos DB container name",
+    )
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS origins into a list."""
@@ -75,6 +93,18 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return self.app_env.lower() in ("production", "prod")
+
+    @property
+    def is_cosmos_enabled(self) -> bool:
+        """Check if Cosmos DB is configured."""
+        return self.cosmos_connection_string is not None
+
+    @property
+    def is_local_cosmos(self) -> bool:
+        """Check if using local Cosmos DB emulator."""
+        if not self.cosmos_connection_string:
+            return False
+        return "localhost:8081" in self.cosmos_connection_string
 
 
 @lru_cache()

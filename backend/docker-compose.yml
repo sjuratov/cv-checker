@@ -1,0 +1,31 @@
+services:
+  cosmosdb:
+    container_name: cv-checker-cosmos-emulator
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    platform: linux/amd64
+    tty: true
+    restart: unless-stopped
+    mem_limit: 3g
+    cpu_count: 2
+    environment:
+      - AZURE_COSMOS_EMULATOR_PARTITION_COUNT=3
+      - AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE=true
+      - AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE=127.0.0.1
+    ports:
+      - "8081:8081"
+      - "10251:10251"
+      - "10252:10252"
+      - "10253:10253"
+      - "10254:10254"
+    volumes:
+      - cosmos-data:/data/db
+    healthcheck:
+      test: ["CMD", "curl", "-k", "https://localhost:8081/_explorer/index.html"]
+      interval: 60s
+      timeout: 30s
+      retries: 10
+      start_period: 180s
+
+volumes:
+  cosmos-data:
+    driver: local

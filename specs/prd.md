@@ -117,6 +117,91 @@ CV Checker addresses these challenges by:
 
 ---
 
+## Data Persistence & Storage
+
+### Business Value
+
+Data persistence transforms CV Checker from a stateless tool into a valuable career companion. By storing CVs, job descriptions, and analysis results, users gain:
+
+- **Historical Context:** Track improvements over time, compare different CV versions, understand which changes increased match scores
+- **Returning User Experience:** No need to re-upload CVs or re-enter job descriptions on subsequent visits
+- **Data Continuity:** Analysis history provides evidence of CV optimization efforts, useful for career coaching and job search tracking
+- **Future Extensibility:** Foundation for advanced features like progress dashboards, multi-device sync, and data export
+
+### Core Entities to Persist
+
+**1. CVs (Curriculum Vitae)**
+- User-uploaded CV content (Markdown format)
+- Upload metadata: timestamp, filename, file size
+- Association with user session/account
+
+**2. Jobs (Job Descriptions)**
+- Manually entered or scraped job description text
+- Source information: manual vs LinkedIn URL
+- Submission timestamp and character count
+
+**3. Analysis Results**
+- Complete analysis output: scores, recommendations, matched/missing skills
+- References to associated CV and Job
+- Analysis timestamp for historical tracking
+- Enables re-viewing past analyses without re-processing
+
+### User Identification Strategy (MVP)
+
+Phase 2 introduces **session-based user identification** without authentication:
+
+- **Frontend generates UUID** on first visit, stored in browser localStorage
+- **User ID serves as partition key** in Azure Cosmos DB (efficient data isolation)
+- **No login required:** Users access their data via persistent session ID
+- **Browser-specific:** Data accessible only from the browser where analysis was performed
+- **Privacy-friendly:** No email, password, or personal information collected
+
+**Limitations (Addressed in Phase 3 with Authentication):**
+- Data not accessible across devices or browsers
+- Clearing browser data loses session ID (data orphaned)
+- No password protection on analysis history
+
+**User Experience:**
+- Seamless: No registration friction for first-time users
+- Transparent: Privacy notice explains local session storage
+- Optional: "Clear My Data" button removes all stored analyses
+
+### Local vs Azure Deployment
+
+**Local Development: Docker Compose + Cosmos DB Linux Emulator**
+- **No Azure account required** for local development
+- **Full feature parity** with production environment
+- **Fast iteration:** No network latency, instant restarts
+- **Cost-free:** Emulator runs locally, no Azure charges
+- **Setup:** Single `docker-compose up` command starts backend + Cosmos DB emulator
+
+**Production: Azure Cosmos DB**
+- **Serverless tier (recommended for MVP):** Pay only for operations performed, auto-scales
+- **Single container:** `cv-checker-data` with `userId` partition key
+- **Global distribution:** Low-latency reads/writes from any region (future)
+- **Automatic indexing:** Efficient queries on `userId`, `createdAt`, `type` fields
+- **Seamless migration:** Local development data schema matches production exactly
+
+**Deployment Strategy:**
+- **Environment variable swap:** Backend reads connection string from `COSMOS_CONNECTION_STRING` environment variable
+- **Local:** Points to Cosmos DB emulator (`https://localhost:8081/`)
+- **Production:** Points to Azure Cosmos DB account
+- **No code changes** required when moving from local to cloud
+
+### Data Retention & Privacy
+
+**MVP (Phase 2):**
+- **No automatic deletion:** Data persists until user manually clears session or browser data
+- **No cross-user access:** userId ensures data isolation
+- **No data export:** Users can view but not download analysis history (Phase 3 feature)
+
+**Future (Phase 3 with Authentication):**
+- **GDPR compliance:** User-initiated data deletion, data export ("Download My Data")
+- **Retention policy:** Option to auto-delete analyses older than X months
+- **Multi-device sync:** Authenticated users access data from any device
+
+---
+
 ## Features & Requirements
 
 ### Feature 1: CV Upload & Storage
@@ -127,21 +212,23 @@ CV Checker addresses these challenges by:
 
 **FR1.1** - CV File Upload
 - **Priority:** P0 (Must Have)
-- **Description:** System accepts Markdown (.md) format CVs via file upload
+- **Description:** System accepts Markdown (.md) format CVs via frontend file upload
 - **Acceptance Criteria:**
-  - Upload endpoint accepts .md files up to 2MB
-  - Validates file format and size
-  - Returns upload confirmation with unique CV ID
-  - Stores CV content in Azure Cosmos DB
+  - Frontend accepts .md files up to 2MB
+  - Validates file format and size client-side
+  - CV content sent to backend as part of analysis request
+  - Backend stores CV content in Azure Cosmos DB with unique ID
+  - CV associated with userId from frontend session
 
 **FR1.2** - CV Storage
 - **Priority:** P0 (Must Have)
-- **Description:** Store uploaded CVs for future analysis
+- **Description:** Store uploaded CVs for future analysis and retrieval
 - **Acceptance Criteria:**
-  - Each CV assigned unique identifier
+  - Each CV assigned unique identifier (UUID)
   - CV content stored in Azure Cosmos DB
-  - Metadata captured: upload timestamp, file size, format
-  - Supports retrieval by CV ID
+  - Metadata captured: userId, upload timestamp, filename, file size, format
+  - Supports retrieval by CV ID and userId (partition key)
+  - CVs accessible only by originating userId (data isolation)
 
 **FR1.3** - CV Format Validation
 - **Priority:** P0 (Must Have)
@@ -179,12 +266,13 @@ CV Checker addresses these challenges by:
 
 **FR2.2** - Job Description Storage
 - **Priority:** P0 (Must Have)
-- **Description:** Store job descriptions for analysis
+- **Description:** Store job descriptions for analysis and historical reference
 - **Acceptance Criteria:**
-  - Each job description assigned unique ID
-  - Stored in Azure Cosmos DB
-  - Metadata: submission timestamp, character count, source type
-  - Retrievable by job ID
+  - Each job description assigned unique ID (UUID)
+  - Stored in Azure Cosmos DB with userId partition key
+  - Metadata: userId, submission timestamp, character count, source type (manual/LinkedIn URL)
+  - Retrievable by job ID and userId
+  - Jobs accessible only by originating userId
 
 **FR2.3** - Job Description Preprocessing & Validation
 - **Priority:** P1 (Should Have)
@@ -434,22 +522,24 @@ CV Checker addresses these challenges by:
 **Requirements:**
 
 **FR5.1** - Analysis Storage
-- **Priority:** P1 (Should Have)
-- **Description:** Store each analysis with full results
+- **Priority:** P0 (Must Have - Phase 2)
+- **Description:** Store each analysis with full results for historical tracking
 - **Acceptance Criteria:**
-  - Each analysis saved to Azure Cosmos DB
-  - Includes: CV ID, Job ID, score, recommendations, timestamp
-  - Retrievable by analysis ID
-  - Supports querying by CV ID or Job ID
+  - Each analysis saved to Azure Cosmos DB with userId partition key
+  - Includes: userId, CV ID, Job ID, overall score, subscores, recommendations, timestamp
+  - Retrievable by analysis ID and userId
+  - Supports querying by userId to list all user analyses
+  - Data isolation: analyses accessible only by originating userId
 
 **FR5.2** - History Retrieval
-- **Priority:** P1 (Should Have)
-- **Description:** Access previous analyses
+- **Priority:** P0 (Must Have - Phase 2)
+- **Description:** Access previous analyses by user session
 - **Acceptance Criteria:**
-  - API endpoint to list analyses by CV
-  - Sort by date (newest first)
-  - Filter by score range
-  - Return paginated results
+  - API endpoint to list analyses by userId
+  - Sort by date (newest first) or score (highest/lowest first)
+  - Filter by date range, score range
+  - Return paginated results (10 per page default)
+  - Include CV filename and job title/preview for context
 
 **FR5.3** - Progress Tracking (Future)
 - **Priority:** P3 (Won't Have - Phase 3)

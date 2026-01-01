@@ -122,6 +122,10 @@ class HealthCheckResponse(BaseModel):
         default=None,
         description="Azure OpenAI connection status",
     )
+    cosmos_db: Optional[str] = Field(
+        default="not_configured",
+        description="Cosmos DB connection status",
+    )
 
     model_config = {
         "json_schema_extra": {
@@ -130,6 +134,7 @@ class HealthCheckResponse(BaseModel):
                 "version": "1.0.0",
                 "service": "cv-checker-api",
                 "azure_openai": "connected",
+                "cosmos_db": "connected",
             }
         }
     }

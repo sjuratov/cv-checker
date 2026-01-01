@@ -5,6 +5,7 @@
 import { CVUpload } from '../upload/CVUpload';
 import { JobDescriptionInput } from '../upload/JobDescriptionInput';
 import { AnalyzeButton } from '../upload/AnalyzeButton';
+import { ConnectionStatus } from '../common/ConnectionStatus';
 import { Clock } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -30,6 +31,9 @@ export function UploadView() {
           </button>
         )}
       </header>
+
+      {/* Backend Connection Status */}
+      <ConnectionStatus />
 
       <div className="upload-grid">
         <div className="upload-column">

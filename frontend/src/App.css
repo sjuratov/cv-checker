@@ -100,6 +100,67 @@ body {
   color: #667eea;
 }
 
+/* ===== Connection Status ===== */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.connection-status .icon {
+  flex-shrink: 0;
+}
+
+.connection-status.status-checking {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+}
+
+.connection-status.status-connected {
+  background: #d1fae5;
+  border: 1px solid #86efac;
+  color: #065f46;
+}
+
+.connection-status.status-error {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.connection-status.status-disconnected {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
+.connection-status .status-message {
+  flex: 1;
+}
+
+.connection-status .btn-text {
+  flex-shrink: 0;
+}
+
+.icon.text-green {
+  color: #10b981;
+}
+
+.icon.text-red {
+  color: #ef4444;
+}
+
+.icon.text-yellow {
+  color: #f59e0b;
+}
+
 /* ===== Drop Zone ===== */
 .drop-zone {
   border: 3px dashed #cbd5e1;

@@ -1,11 +1,11 @@
 /**
  * Analysis Trigger Button Component
+ * Integrates with backend API via AnalysisService
  */
 
 import { Sparkles, Loader2 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { api } from '../../lib/api';
-import { validateCVContent, validateJobDescription } from '../../utils/validation';
+import { AnalysisService } from '../../services/analysisService';
 
 export function AnalyzeButton() {
   const {
@@ -25,33 +25,29 @@ export function AnalyzeButton() {
   const handleAnalyze = async () => {
     if (!currentCV.content || !currentJob.description) return;
 
-    // Final validation
-    const cvValidation = validateCVContent(currentCV.content);
-    const jobValidation = validateJobDescription(currentJob.description);
-
-    if (!cvValidation.valid) {
-      failAnalysis(cvValidation.error!);
-      return;
-    }
-
-    if (!jobValidation.valid) {
-      failAnalysis(jobValidation.error!);
-      return;
-    }
-
-    // Start analysis
+    // Start analysis in store
     startAnalysis();
 
     try {
-      const result = await api.analyze({
-        cv_markdown: currentCV.content,
-        job_description: currentJob.description,
+      // Call analysis service
+      const result = await AnalysisService.analyze({
+        cvMarkdown: currentCV.content,
+        jobDescription: currentJob.description,
       });
 
-      completeAnalysis(result);
+      if (result.success && result.data) {
+        // Analysis succeeded
+        completeAnalysis(result.data);
+      } else {
+        // Analysis failed with validation or API error
+        failAnalysis(result.error || 'Analysis failed. Please try again.');
+      }
     } catch (error) {
+      // Unexpected error
       const errorMessage =
-        error instanceof Error ? error.message : 'Analysis failed. Please try again.';
+        error instanceof Error
+          ? error.message
+          : 'An unexpected error occurred. Please try again.';
       failAnalysis(errorMessage);
     }
   };
@@ -92,9 +88,9 @@ export function AnalyzeButton() {
       {analysis.isLoading && (
         <div className="loading-status">
           <p className="loading-text">
-            Our AI is comparing your CV against the job description.
+            🤖 Our AI agents are analyzing your CV against the job description...
             <br />
-            This usually takes 20-30 seconds.
+            <small>This typically takes 20-40 seconds as multiple AI agents work together.</small>
           </p>
         </div>
       )}
@@ -103,7 +99,7 @@ export function AnalyzeButton() {
         <div className="error-message large">
           <strong>⚠️ Analysis Failed</strong>
           <p>{analysis.error}</p>
-          <button className="btn btn-secondary" onClick={handleAnalyze}>
+          <button className="btn btn-secondary" onClick={handleAnalyze} disabled={!canAnalyze}>
             Retry Analysis
           </button>
         </div>

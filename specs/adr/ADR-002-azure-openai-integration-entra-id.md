@@ -1,7 +1,8 @@
 # ADR-002: Azure OpenAI Integration with Entra ID Authentication
 
 **Date**: 2025-12-31  
-**Status**: Accepted  
+**Updated**: 2026-01-01 (Added API Key support for development)  
+**Status**: Accepted (Amended)  
 **Decision Makers**: Architecture Team, Security Team  
 **Technical Story**: Secure Azure OpenAI Integration
 
@@ -22,7 +23,22 @@ Azure OpenAI Service supports two authentication methods:
 
 ## Decision
 
-We will use **Azure OpenAI gpt-4.1 model** with **Entra ID OAuth authentication** via **DefaultAzureCredential** for all environments.
+We will use **Azure OpenAI gpt-4.1 model** with flexible authentication supporting **both API Key and Entra ID OAuth** via **DefaultAzureCredential**.
+
+### Amendment (2026-01-01): API Key Support Added
+
+**Original Decision:** Entra ID only  
+**Updated Decision:** Support both authentication methods with preference order:
+1. **API Key** (if `AZURE_OPENAI_API_KEY` environment variable is set) - Used for development and simple deployments
+2. **Entra ID** (via `DefaultAzureCredential`) - Used for production with managed identities
+
+**Rationale for Amendment:**
+- Developer experience: API keys from Azure Portal are simpler than Entra ID setup for local development
+- Flexibility: Organizations can choose based on security requirements
+- Pragmatism: Tenant mismatch errors blocked development; API keys unblock immediately
+- Security maintained: Production can still use Entra ID; development uses time-limited keys
+
+**Implementation:** Client initialization checks for API key first, falls back to DefaultAzureCredential if not present.
 
 ### Configuration Management
 
@@ -58,27 +74,12 @@ We will use **Azure OpenAI gpt-4.1 model** with **Entra ID OAuth authentication*
 - Cost-effective balance of performance and price
 
 ## Implementation
-
-### Environment Configuration
-
-```bash
-# .env file (not committed to git)
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=gpt-4-1
-AZURE_OPENAI_API_VERSION=2024-08-01-preview
-
-# For local development, also set:
-AZURE_TENANT_ID=your-tenant-id
-AZURE_CLIENT_ID=your-client-id
-AZURE_CLIENT_SECRET=your-client-secret
-```
-
-### Azure OpenAI Client Setup
+ (Updated 2026-01-01)
 
 ```python
 import os
-from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
+from azure.identity import DefaultAzureCredential
+from agent_framework.azure import AzureOpenAIChatClient
 from typing import Optional
 
 class AzureOpenAIConfig:
@@ -88,21 +89,47 @@ class AzureOpenAIConfig:
         self.endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         self.deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4-1")
         self.api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
+        self.api_key = os.getenv("AZURE_OPENAI_API_KEY")  # Optional
         
         if not self.endpoint:
             raise ValueError("AZURE_OPENAI_ENDPOINT environment variable not set")
     
-    def create_client(self) -> AzureOpenAIChatCompletionClient:
-        """Create Azure OpenAI client with Entra ID authentication."""
+    def create_client(self) -> AzureOpenAIChatClient:
+        """
+        Create Azure OpenAI client with flexible authentication.
         
-        # DefaultAzureCredential chain:
-        # 1. Environment variables (local dev with service principal)
-        # 2. Managed Identity (Azure-hosted apps)
-        # 3. Azure CLI (local dev with az login)
-        # 4. Visual Studio Code (local dev with VS Code Azure extension)
-        credential = DefaultAzureCredential()
+        Authentication options (in priority order):
+        1. API Key: If AZURE_OPENAI_API_KEY is set, uses key-based authentication
+        2. Entra ID: Uses DefaultAzureCredential which tries in order:
+           - Environment variables (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)
+           - Managed Identity (for Azure-hosted apps)
+           - Azure CLI (az login)
+           - Visual Studio Code Azure extension
         
-        # Create token provider for Cognitive Services scope
+        Returns:
+            AzureOpenAIChatClient from Microsoft Agent Framework
+        """
+        # Check if API key is available
+        if self.api_key:
+            logger.info("Creating Azure OpenAI client with API key")
+            client = AzureOpenAIChatClient(
+                api_key=self.api_key,
+                endpoint=self.endpoint,
+                deployment_name=self.deployment,
+                api_version=self.api_version,
+            )
+        else:
+            logger.info("Creating Azure OpenAI client with DefaultAzureCredential")
+            # Create credential for Entra ID authentication
+            credential = DefaultAzureCredential()
+            client = AzureOpenAIChatClient(
+                credential=credential,
+                endpoint=self.endpoint,
+                deployment_name=self.deployment,
+                api_version=self.api_version,
+            )
+        
+        logger.info("Azure OpenAI client created successfully")# Create token provider for Cognitive Services scope
         token_provider = get_bearer_token_provider(
             credential,
             "https://cognitiveservices.azure.com/.default"

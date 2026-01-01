@@ -37,29 +37,40 @@ class AzureOpenAIConfig:
 
     def create_client(self) -> AzureOpenAIChatClient:
         """
-        Create Azure OpenAI chat client using Microsoft Agent Framework with Entra ID auth.
+        Create Azure OpenAI chat client using Microsoft Agent Framework.
 
-        Uses DefaultAzureCredential which tries authentication methods in order:
-        1. Environment variables (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)
-        2. Managed Identity (for Azure-hosted apps)
-        3. Azure CLI (az login)
-        4. Visual Studio Code Azure extension
+        Authentication options:
+        1. API Key: If AZURE_OPENAI_API_KEY is set, uses key-based authentication
+        2. Entra ID: Uses DefaultAzureCredential which tries in order:
+           - Environment variables (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)
+           - Managed Identity (for Azure-hosted apps)
+           - Azure CLI (az login)
+           - Visual Studio Code Azure extension
 
         Returns:
             AzureOpenAIChatClient from Microsoft Agent Framework
         """
-        logger.info("Creating Microsoft Agent Framework Azure OpenAI client with DefaultAzureCredential")
-
-        # Create credential for Entra ID authentication
-        credential = DefaultAzureCredential()
-
-        # Create Microsoft Agent Framework Azure OpenAI chat client
-        client = AzureOpenAIChatClient(
-            credential=credential,
-            endpoint=self.endpoint,
-            deployment_name=self.deployment,
-            api_version=self.api_version,
-        )
+        # Check if API key is available
+        api_key = self.settings.azure_openai_api_key
+        
+        if api_key:
+            logger.info("Creating Microsoft Agent Framework Azure OpenAI client with API key")
+            client = AzureOpenAIChatClient(
+                api_key=api_key,
+                endpoint=self.endpoint,
+                deployment_name=self.deployment,
+                api_version=self.api_version,
+            )
+        else:
+            logger.info("Creating Microsoft Agent Framework Azure OpenAI client with DefaultAzureCredential")
+            # Create credential for Entra ID authentication
+            credential = DefaultAzureCredential()
+            client = AzureOpenAIChatClient(
+                credential=credential,
+                endpoint=self.endpoint,
+                deployment_name=self.deployment,
+                api_version=self.api_version,
+            )
 
         logger.info("Microsoft Agent Framework Azure OpenAI client created successfully")
         return client

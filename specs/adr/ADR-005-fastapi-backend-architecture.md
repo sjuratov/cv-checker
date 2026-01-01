@@ -506,6 +506,10 @@ pydantic-settings==2.1.0
 azure-identity==1.15.0
 # ... other dependencies
 
+# Note: This project uses uv as the standard package manager
+# Install: curl -LsSf https://astral.sh/uv/install.sh | sh
+# Usage: uv pip install -r requirements.txt
+
 # startup.sh
 #!/bin/bash
 uvicorn app:app --host 0.0.0.0 --port 8000 --workers 4
@@ -514,6 +518,33 @@ uvicorn app:app --host 0.0.0.0 --port 8000 --workers 4
 PORT=8000
 WEBSITES_PORT=8000
 ```
+
+### Development Tooling
+
+**Package Manager**: This project uses [**uv**](https://github.com/astral-sh/uv) as the standard Python package manager for significantly faster installations compared to pip.
+
+```bash
+# Install uv (one-time setup)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment
+uv venv
+
+# Install dependencies
+uv pip install -r requirements.txt
+
+# Add new package
+uv pip install package-name
+
+# Update requirements
+uv pip freeze > requirements.txt
+```
+
+**Benefits of uv**:
+- 10-100x faster than pip
+- Compatible with existing pip workflows
+- Works with requirements.txt and pyproject.toml
+- Better dependency resolution
 
 ## Related Decisions
 

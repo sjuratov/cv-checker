@@ -21,6 +21,9 @@
     },
     "deepwiki": {
       "url": "https://mcp.deepwiki.com/sse"
+    },
+    "CopilotKit MCP": {
+      "url": "https://mcp.copilotkit.ai/sse"
     }
   }
 }

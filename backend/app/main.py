@@ -25,6 +25,7 @@ from app.models.responses import (
     SkillMatchResponse,
 )
 from app.repositories.analysis import AnalysisRepository, InMemoryAnalysisRepository
+from app.repositories.cosmos_repository import CosmosDBRepository
 from app.services.cv_checker import CVCheckerService
 from app.services.linkedin_scraper import (
     AntiBotDetected,
@@ -65,6 +66,18 @@ async def lifespan(app: FastAPI):
     app.state.linkedin_scraper = LinkedInScraperService()
     await app.state.linkedin_scraper.initialize()
     logger.info("LinkedIn scraper service initialized")
+    
+    # Initialize Cosmos DB repository (if enabled)
+    if settings.is_cosmos_enabled:
+        try:
+            app.state.cosmos_repository = CosmosDBRepository.create_from_settings(settings)
+            logger.info("Cosmos DB repository initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Cosmos DB repository: {e}")
+            app.state.cosmos_repository = None
+    else:
+        logger.info("Cosmos DB not configured, persistence disabled")
+        app.state.cosmos_repository = None
 
     yield
 
@@ -104,12 +117,18 @@ app.add_middleware(
 
 
 # Dependency injection
-def get_repository() -> AnalysisRepository:
+def get_repository(request: Request) -> AnalysisRepository:
     """
     Get analysis repository instance.
 
-    Returns in-memory repo for v1, will return Cosmos repo for v2+.
+    Returns Cosmos DB repository if configured, otherwise in-memory repository.
     """
+    cosmos_repo = getattr(request.app.state, 'cosmos_repository', None)
+    if cosmos_repo is not None:
+        logger.debug("Using Cosmos DB repository")
+        return cosmos_repo
+    
+    logger.debug("Using in-memory repository (CosmosDB not configured)")
     return InMemoryAnalysisRepository()
 
 
@@ -124,6 +143,19 @@ def get_linkedin_scraper(request: Request) -> LinkedInScraperService:
         LinkedInScraperService instance
     """
     return request.app.state.linkedin_scraper
+
+
+def get_cosmos_repository(request: Request) -> CosmosDBRepository | None:
+    """
+    Get Cosmos DB repository from app state.
+    
+    Args:
+        request: FastAPI request object
+        
+    Returns:
+        CosmosDBRepository instance or None if not configured
+    """
+    return getattr(request.app.state, 'cosmos_repository', None)
 
 
 def get_service(
@@ -219,11 +251,41 @@ async def health_check() -> HealthCheckResponse:
         logger.error(f"Azure OpenAI health check failed: {e}")
         azure_openai_status = "unavailable"
 
+    # Check Cosmos DB connection (Phase 2)
+    cosmos_db_status = "not_configured"
+    if settings.is_cosmos_enabled:
+        try:
+            from azure.cosmos import CosmosClient
+            from azure.identity import DefaultAzureCredential
+            
+            # Check if using Azure AD authentication or connection string
+            connection_str = settings.cosmos_connection_string
+            if "AccountKey=" in connection_str:
+                # Using connection string with account key
+                client = CosmosClient.from_connection_string(connection_str)
+            else:
+                # Using Azure AD authentication (DefaultAzureCredential)
+                credential = DefaultAzureCredential()
+                client = CosmosClient(connection_str, credential)
+            
+            # Test connection by listing databases (convert to list to execute)
+            _ = list(client.list_databases())
+            cosmos_db_status = "connected"
+        except Exception as e:
+            logger.error(f"Cosmos DB health check failed: {e}")
+            cosmos_db_status = "unavailable"
+
+    # Determine overall status
+    is_healthy = azure_openai_status == "connected"
+    if settings.is_cosmos_enabled:
+        is_healthy = is_healthy and cosmos_db_status == "connected"
+
     return HealthCheckResponse(
-        status="healthy" if azure_openai_status == "connected" else "degraded",
+        status="healthy" if is_healthy else "degraded",
         version=__version__,
         service="cv-checker-api",
-        azure_openai=azure_openai_status
+        azure_openai=azure_openai_status,
+        cosmos_db=cosmos_db_status if settings.is_cosmos_enabled else "not_configured"
     )
 
 
@@ -518,3 +580,181 @@ if __name__ == "__main__":
         reload=settings.is_development,
         log_level=settings.log_level.lower(),
     )
+
+
+# Phase 2: Cosmos DB Persistence Endpoints
+
+
+@app.post(
+    "/api/v1/cvs",
+    status_code=status.HTTP_201_CREATED,
+    summary="Store CV",
+    description="Store CV content in Cosmos DB (Phase 2)",
+    tags=["Persistence"],
+)
+async def store_cv(
+    cv_content: str,
+    user_id: str,
+    repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
+) -> dict:
+    """
+    Store CV in Cosmos DB.
+    
+    Args:
+        cv_content: CV markdown content
+        user_id: User ID (partition key)
+        repository: Cosmos DB repository
+        
+    Returns:
+        CV document ID
+    """
+    if not repository:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cosmos DB not configured",
+        )
+    
+    try:
+        cv_id = await repository.create_cv(user_id, cv_content)
+        return {"cv_id": cv_id, "user_id": user_id}
+    except Exception as e:
+        logger.error(f"Failed to store CV: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store CV: {str(e)}",
+        )
+
+
+@app.post(
+    "/api/v1/jobs/store",
+    status_code=status.HTTP_201_CREATED,
+    summary="Store job description",
+    description="Store job description in Cosmos DB (Phase 2)",
+    tags=["Persistence"],
+)
+async def store_job(
+    content: str,
+    user_id: str,
+    source_type: str,
+    source_url: str | None = None,
+    repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
+) -> dict:
+    """
+    Store job description in Cosmos DB.
+    
+    Args:
+        content: Job description content
+        user_id: User ID (partition key)
+        source_type: Source type (manual or linkedin_url)
+        source_url: Optional source URL
+        repository: Cosmos DB repository
+        
+    Returns:
+        Job document ID
+    """
+    if not repository:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cosmos DB not configured",
+        )
+    
+    try:
+        job_id = await repository.create_job(user_id, content, source_type, source_url)
+        return {"job_id": job_id, "user_id": user_id, "source_type": source_type}
+    except Exception as e:
+        logger.error(f"Failed to store job: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store job: {str(e)}",
+        )
+
+
+@app.get(
+    "/api/v1/analyses",
+    summary="List analyses",
+    description="List analysis results for a user (Phase 2)",
+    tags=["Persistence"],
+)
+async def list_analyses(
+    user_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
+) -> dict:
+    """
+    List analyses for a user.
+    
+    Args:
+        user_id: User ID (partition key)
+        limit: Maximum results (default 50)
+        offset: Results offset (default 0)
+        repository: Cosmos DB repository
+        
+    Returns:
+        List of analysis documents
+    """
+    if not repository:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cosmos DB not configured",
+        )
+    
+    try:
+        analyses = await repository.list_analyses(user_id, limit, offset)
+        return {
+            "user_id": user_id,
+            "count": len(analyses),
+            "analyses": [analysis.model_dump() for analysis in analyses],
+        }
+    except Exception as e:
+        logger.error(f"Failed to list analyses: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list analyses: {str(e)}",
+        )
+
+
+@app.get(
+    "/api/v1/analyses/{analysis_id}",
+    summary="Get analysis by ID",
+    description="Retrieve analysis result by ID (Phase 2)",
+    tags=["Persistence"],
+)
+async def get_analysis(
+    analysis_id: str,
+    user_id: str,
+    repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
+) -> dict:
+    """
+    Get analysis by ID.
+    
+    Args:
+        analysis_id: Analysis document ID
+        user_id: User ID (partition key)
+        repository: Cosmos DB repository
+        
+    Returns:
+        Analysis document
+    """
+    if not repository:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cosmos DB not configured",
+        )
+    
+    try:
+        analysis = await repository.get_analysis_by_id(user_id, analysis_id)
+        if not analysis:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Analysis not found: {analysis_id}",
+            )
+        return analysis.model_dump()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get analysis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get analysis: {str(e)}",
+        )

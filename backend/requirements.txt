@@ -11,6 +11,9 @@ azure-identity>=1.19.0
 agent-framework-core
 agent-framework-azure-ai
 
+# Azure Cosmos DB - Data Persistence (Phase 2)
+azure-cosmos>=4.6.0
+
 # Web Scraping - LinkedIn Integration
 playwright==1.40.0
 slowapi==0.1.9

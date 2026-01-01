@@ -24,8 +24,17 @@ The system uses a sequential agent orchestration pattern with four specialized a
 ### Prerequisites
 
 - Python 3.11 or higher
+- **uv** - Fast Python package manager ([installation](https://github.com/astral-sh/uv))
+  ```bash
+  # macOS/Linux
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  
+  # Or via pip
+  pip install uv
+  ```
 - Azure OpenAI access with GPT-4.1 deployment
 - Azure CLI (for local development) or service principal credentials
+- **Docker Desktop** (for Cosmos DB emulator - Phase 2)
 
 ### Installation
 
@@ -37,22 +46,43 @@ cd cv-checker/backend
 
 2. Create and activate virtual environment:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Using uv (recommended - much faster)
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Or traditional method
+# python -m venv venv
+# source venv/bin/activate
 ```
 
 3. Install dependencies:
 ```bash
-pip install -r requirements.txt
+# Using uv (recommended)
+uv pip install -r requirements.txt
+
+# Or traditional pip
+# pip install -r requirements.txt
 ```
 
 4. Configure environment variables:
 ```bash
-cp .env.example .env
+cp .env.local .env
 # Edit .env with your Azure OpenAI credentials
 ```
 
-5. Authenticate with Azure (if using Azure CLI method):
+5. **[Phase 2] Start Cosmos DB Emulator:**
+```bash
+# Start the emulator (runs in Docker)
+docker-compose up -d
+
+# Wait for emulator to be ready (takes ~2 minutes first time)
+docker-compose logs -f cosmosdb
+
+# Initialize database and container (using uv)
+uv run python scripts/init_cosmos.py
+```
+
+6. Authenticate with Azure (if using Azure CLI method):
 ```bash
 az login
 ```
@@ -61,12 +91,42 @@ az login
 
 **Development Mode:**
 ```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Production Mode:**
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Verify Setup
+
+Check that all services are running:
+```bash
+# Check backend health
+curl http://localhost:8000/api/v1/health
+
+# Expected response:
+# {
+#   "status": "healthy",
+#   "version": "1.0.0",
+#   "service": "cv-checker-api",
+#   "azure_openai": "connected",
+#   "cosmos_db": "connected"
+# }
+
+# Check Cosmos DB emulator UI (local only)
+open https://localhost:8081/_explorer/index.html
+```
+
+### Stopping Services
+
+```bash
+# Stop Cosmos DB emulator
+docker-compose down
+
+# Or keep data and just stop:
+docker-compose stop
 ```
 
 ### API Documentation
@@ -113,16 +173,27 @@ curl -X POST "http://localhost:8000/api/v1/analyze" \
 curl http://localhost:8000/api/v1/health
 ```
 
+**Response:**
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "service": "cv-checker-api",
+  "azure_openai": "connected",
+  "cosmos_db": "connected"
+}
+```
+
 ## Testing
 
 Run the test suite:
 ```bash
-pytest
+uv run pytest
 ```
 
 With coverage report:
 ```bash
-pytest --cov=app --cov-report=html
+uv run pytest --cov=app --cov-report=html
 ```
 
 ## Project Structure
@@ -138,9 +209,13 @@ backend/
 │   ├── services/               # Business logic
 │   ├── repositories/           # Data access layer
 │   └── utils/                  # Utility functions
+├── scripts/
+│   └── init_cosmos.py          # Cosmos DB initialization
 ├── tests/
 │   ├── unit/                   # Unit tests
 │   └── integration/            # Integration tests
+├── docker-compose.yml          # Cosmos DB emulator setup
+├── .env.local                  # Local environment template
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md
@@ -152,17 +227,17 @@ backend/
 
 Format code:
 ```bash
-black app/ tests/
+uv run black app/ tests/
 ```
 
 Lint code:
 ```bash
-ruff check app/ tests/
+uv run ruff check app/ tests/
 ```
 
 Type checking:
 ```bash
-mypy app/
+uv run mypy app/
 ```
 
 ### Environment Variables
@@ -176,6 +251,11 @@ Optional for service principal auth:
 - `AZURE_TENANT_ID`: Azure AD tenant ID
 - `AZURE_CLIENT_ID`: Service principal client ID
 - `AZURE_CLIENT_SECRET`: Service principal secret
+
+Cosmos DB (Phase 2):
+- `COSMOS_CONNECTION_STRING`: Connection string (see `.env.local` for emulator default)
+- `COSMOS_DATABASE_NAME`: Database name (default: cv-checker-db)
+- `COSMOS_CONTAINER_NAME`: Container name (default: cv-checker-data)
 
 ## Azure Setup
 
@@ -224,6 +304,76 @@ az role assignment create \
 
 ## Troubleshooting
 
+### Cosmos DB Emulator Issues
+
+**⚠️ KNOWN ISSUE: Emulator crashes on macOS (Exit Code 139)**
+
+The Cosmos DB Linux emulator frequently crashes on macOS with segmentation faults. This is a known limitation.
+
+**Recommended Solution: Use Azure Cosmos DB Free Tier instead**
+
+```bash
+# Create free Cosmos DB account (1000 RU/s free forever)
+az cosmosdb create \
+  --name cv-checker-cosmos-free \
+  --resource-group cv-checker-rg \
+  --kind GlobalDocumentDB \
+  --locations regionName=eastus \
+  --enable-free-tier true
+
+# Get connection string
+az cosmosdb keys list \
+  --name cv-checker-cosmos-free \
+  --resource-group cv-checker-rg \
+  --type connection-strings \
+  --query "connectionStrings[0].connectionString" -o tsv
+
+# Update .env with Azure connection string
+# COSMOS_CONNECTION_STRING=AccountEndpoint=https://cv-checker-cosmos-free.documents.azure.com:443/;AccountKey=...
+
+# Initialize database
+uv run python scripts/init_cosmos.py
+```
+
+**Alternative: Try the emulator (may not work on macOS)**
+```bash
+# Check if Docker is running
+docker ps
+
+# Check emulator logs
+docker-compose logs cosmosdb
+
+# Reset emulator (WARNING: deletes all data)
+docker-compose down -v
+docker-compose up -d
+```
+
+**Connection refused errors:**
+```bash
+# Verify emulator is healthy
+docker-compose ps
+
+# Should show STATUS as "healthy"
+# If "unhealthy", wait 2-3 minutes for initialization
+
+# Test emulator endpoint directly
+curl -k https://localhost:8081/_explorer/index.html
+```
+
+**Port 8081 already in use:**
+```bash
+# Find what's using port 8081
+lsof -i :8081
+
+# Kill the process or change ports in docker-compose.yml
+```
+
+**macOS SSL certificate warnings:**
+The emulator uses a self-signed certificate, which is expected. The Python SDK handles this automatically.
+
+**"Evaluation version - 22 days left" message:**
+This is normal for the emulator and resets automatically. The emulator is free for local development forever. However, for reliable local development on macOS, we recommend using Azure Cosmos DB free tier instead of the emulator.
+
 ### Authentication Errors
 
 If you see "DefaultAzureCredential failed to retrieve a token":
@@ -237,7 +387,8 @@ If you see "DefaultAzureCredential failed to retrieve a token":
 If you see module import errors:
 1. Ensure virtual environment is activated
 2. Reinstall dependencies: `pip install -r requirements.txt`
-3. Verify Python version: `python --version` (should be 3.11+)
+3. Verify Python version: `python --version
+- **ADR-008**: Cosmos DB Data Persistence (Phase 2)` (should be 3.11+)
 
 ## Architecture Decisions
 
