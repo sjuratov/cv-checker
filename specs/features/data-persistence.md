@@ -306,6 +306,11 @@ Introduce persistent data storage using Azure Cosmos DB to enable CV Checker use
   **Note:** Partition key path is `/userId`, with the field value being the user's session UUID (e.g., `"user-xyz789abc123"`), not the static string `"job"`.
 - **Response:** Include `jobId` in analysis response
 
+**Implementation Note (January 1, 2026):**
+- Backend AnalyzeRequest model includes optional `source_type` (defaults to "manual") and `source_url` (optional, max 500 chars)
+- Frontend properly passes these values from the job input state to the API
+- This ensures job source information is correctly persisted and displayed in analysis results
+
 **Priority:** P0 (Must Have)
 
 ---

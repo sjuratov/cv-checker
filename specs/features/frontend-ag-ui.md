@@ -852,6 +852,14 @@ If backend returns simple strings:
     - "From LinkedIn: [URL]" - if `source_type === 'linkedin_url'` and `source_url` is present
   - Source displayed in small, muted text
   - LinkedIn URL (if present) is a clickable link
+
+**Bug Fix (January 1, 2026):**
+- **Issue:** Job descriptions provided via URL were showing "Manually entered" instead of displaying the clickable URL in the Analysis Results tab.
+- **Root Cause:** Backend was hardcoding `source_type: "manual"` and `source_url: null` instead of passing through the actual values from the request.
+- **Resolution:** 
+  - Backend now accepts `source_type` and `source_url` fields in AnalyzeRequest (optional, with defaults)
+  - Frontend passes `sourceType` and `sourceUrl` from store to API
+  - Source information now correctly displays in the Job Description tab
 - **XSS Protection:**
   - Same sanitization as CV tab using `rehype-sanitize`
   - Render as plain text if not Markdown

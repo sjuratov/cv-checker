@@ -543,9 +543,9 @@ async def analyze_cv(
             job_description=request.job_description,
         )
 
-        # Determine source type (will be enhanced when LinkedIn integration is added to analyze endpoint)
-        source_type = "manual"
-        source_url = None
+        # Use source type and URL from request (defaults to manual if not provided)
+        source_type = request.source_type or "manual"
+        source_url = request.source_url
         
         # If Cosmos DB is configured, create analysis document with full content
         if cosmos_repository:

@@ -34,6 +34,8 @@ export function AnalyzeButton() {
         cvMarkdown: currentCV.content,
         cvFilename: currentCV.filename || 'resume.pdf',
         jobDescription: currentJob.description,
+        sourceType: currentJob.sourceType,
+        sourceUrl: currentJob.sourceUrl,
       });
 
       if (result.success && result.data) {

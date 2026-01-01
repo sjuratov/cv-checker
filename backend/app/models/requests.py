@@ -25,6 +25,15 @@ class AnalyzeRequest(BaseModel):
         max_length=10000,
         description="Job description text",
     )
+    source_type: Optional[Literal["manual", "linkedin_url"]] = Field(
+        default="manual",
+        description="Job description source type: 'manual' for pasted text, 'linkedin_url' for LinkedIn URL",
+    )
+    source_url: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Source URL if job description was fetched from LinkedIn",
+    )
 
     @field_validator("cv_markdown", "job_description")
     @classmethod
@@ -40,6 +49,8 @@ class AnalyzeRequest(BaseModel):
                 "cv_markdown": "# John Doe\n\n## Experience\n\n**Senior Python Developer** (2019-2024)\n- Built scalable APIs with FastAPI\n- Deployed to Azure\n\n## Skills\n- Python (5 years)\n- FastAPI\n- Azure",
                 "cv_filename": "john_doe_resume.pdf",
                 "job_description": "We are seeking a Senior Python Developer with 5+ years of experience in building REST APIs using FastAPI and deploying to cloud platforms like Azure.",
+                "source_type": "manual",
+                "source_url": None,
             }
         }
     }

@@ -11,6 +11,8 @@ export interface AnalyzeRequest {
   cv_markdown: string;
   cv_filename?: string;
   job_description: string;
+  source_type?: 'manual' | 'linkedin_url';
+  source_url?: string | null;
 }
 
 // ============================================================================

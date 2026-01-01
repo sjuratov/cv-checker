@@ -15,6 +15,8 @@ export interface AnalysisInput {
   cvMarkdown: string;
   cvFilename?: string;
   jobDescription: string;
+  sourceType?: 'manual' | 'linkedin_url';
+  sourceUrl?: string | null;
 }
 
 export interface ValidationResult {
@@ -93,6 +95,8 @@ export class AnalysisService {
         cv_markdown: sanitized.cvMarkdown,
         cv_filename: input.cvFilename || 'resume.pdf',
         job_description: sanitized.jobDescription,
+        source_type: input.sourceType || 'manual',
+        source_url: input.sourceUrl || null,
       };
 
       // Step 4: Call API
