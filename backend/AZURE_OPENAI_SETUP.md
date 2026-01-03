@@ -2,7 +2,7 @@
 
 ## The Error You're Seeing
 
-```
+```text
 Token tenant fcbfc09a-8ad2-4370-929e-1946f1aa1f6f does not match resource tenant
 ```
 
@@ -33,6 +33,7 @@ AZURE_OPENAI_API_KEY=YOUR-API-KEY-HERE
 ```
 
 **Replace:**
+
 - `YOUR-ACTUAL-RESOURCE` - with your actual Azure OpenAI resource name
 - `YOUR-DEPLOYMENT-NAME` - with your deployment name (e.g., `gpt-4-1`, `gpt-35-turbo`)
 - `YOUR-API-KEY-HERE` - with the key you copied from Azure Portal
@@ -54,6 +55,7 @@ If you prefer to use Entra ID authentication without API keys:
 ### Option A: Use Azure CLI Login (Match Tenant)
 
 1. Login to Azure CLI with the correct tenant:
+
    ```bash
    az login --tenant YOUR-AZURE-OPENAI-RESOURCE-TENANT-ID
    ```
@@ -67,6 +69,7 @@ If you prefer to use Entra ID authentication without API keys:
 1. Create a service principal in the same tenant as your Azure OpenAI resource
 2. Grant it "Cognitive Services OpenAI User" role on your Azure OpenAI resource
 3. Configure in `.env`:
+
    ```bash
    AZURE_TENANT_ID=your-azure-openai-resource-tenant-id
    AZURE_CLIENT_ID=your-service-principal-client-id
@@ -91,12 +94,15 @@ You should not see tenant mismatch errors anymore.
 ## Troubleshooting
 
 ### "404 Resource Not Found"
+
 - Check that `AZURE_OPENAI_ENDPOINT` is correct
 - Verify the deployment name matches what's in your Azure OpenAI resource
 
 ### "401 Unauthorized"
+
 - Verify your API key is correct
 - For Entra ID: ensure you have the "Cognitive Services OpenAI User" role
 
 ### "Deployment not found"
+
 - Check that `AZURE_OPENAI_DEPLOYMENT` matches the exact deployment name in Azure Portal

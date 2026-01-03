@@ -18,6 +18,7 @@ CV Checker requires integration with Azure OpenAI Service to power its AI agents
 - Support for CI/CD pipelines
 
 Azure OpenAI Service supports two authentication methods:
+
 1. **API Key Authentication**: Simple but requires key management and rotation
 2. **Entra ID (Azure AD) OAuth**: Role-based access control with managed identities
 
@@ -29,10 +30,12 @@ We will use **Azure OpenAI gpt-4.1 model** with flexible authentication supporti
 
 **Original Decision:** Entra ID only  
 **Updated Decision:** Support both authentication methods with preference order:
+
 1. **API Key** (if `AZURE_OPENAI_API_KEY` environment variable is set) - Used for development and simple deployments
 2. **Entra ID** (via `DefaultAzureCredential`) - Used for production with managed identities
 
 **Rationale for Amendment:**
+
 - Developer experience: API keys from Azure Portal are simpler than Entra ID setup for local development
 - Flexibility: Organizations can choose based on security requirements
 - Pragmatism: Tenant mismatch errors blocked development; API keys unblock immediately
@@ -50,6 +53,7 @@ We will use **Azure OpenAI gpt-4.1 model** with flexible authentication supporti
 ### Why Entra ID Over API Keys
 
 **API Key authentication rejected** because:
+
 - Requires manual key rotation and management
 - Keys can be accidentally committed to source control
 - No granular permission control
@@ -57,6 +61,7 @@ We will use **Azure OpenAI gpt-4.1 model** with flexible authentication supporti
 - Non-compliant with zero-trust security model
 
 **Entra ID authentication chosen** because:
+
 - Leverages managed identities in Azure environments
 - Supports role-based access control (RBAC)
 - Automatic credential rotation
@@ -74,7 +79,8 @@ We will use **Azure OpenAI gpt-4.1 model** with flexible authentication supporti
 - Cost-effective balance of performance and price
 
 ## Implementation
- (Updated 2026-01-01)
+
+(Updated 2026-01-01)
 
 ```python
 import os

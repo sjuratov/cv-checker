@@ -16,7 +16,7 @@ export function JobInputModeToggle() {
         className={`toggle-btn ${jobInputMode === 'linkedin_url' ? 'active' : ''}`}
         onClick={() => setJobInputMode('linkedin_url')}
         role="radio"
-        aria-checked={jobInputMode === 'linkedin_url' ? 'true' : 'false'}
+        aria-checked={jobInputMode === 'linkedin_url' ? "true" : "false"}
         aria-label="LinkedIn URL mode"
       >
         <Link2 size={18} />
@@ -27,7 +27,7 @@ export function JobInputModeToggle() {
         className={`toggle-btn ${jobInputMode === 'manual' ? 'active' : ''}`}
         onClick={() => setJobInputMode('manual')}
         role="radio"
-        aria-checked={jobInputMode === 'manual' ? 'true' : 'false'}
+        aria-checked={jobInputMode === 'manual' ? "true" : "false"}
         aria-label="Manual input mode"
       >
         <FileText size={18} />

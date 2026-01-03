@@ -10,7 +10,6 @@ import type {
   AnalyzeResponse,
   HealthCheckResponse,
   ErrorResponse,
-  APIError,
   HistoryResponse,
 } from '../types/api';
 

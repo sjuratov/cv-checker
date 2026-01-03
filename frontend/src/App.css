@@ -1462,7 +1462,6 @@ body {
   border-bottom: 2px solid #e5e7eb;
   margin-bottom: 2rem;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .tab-button {

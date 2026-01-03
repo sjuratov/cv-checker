@@ -48,13 +48,13 @@ export function TabNavigation({ tabs, activeTab, onTabChange }: TabNavigationPro
 
   return (
     <div className="tab-navigation" role="tablist" aria-label="Analysis sections">
-      {tabs.map((tab, index) => {
+      {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
         return (
           <button
             key={tab.id}
             role="tab"
-            aria-selected={isActive}
+            aria-selected={isActive ? "true" : "false"}
             aria-controls={`tabpanel-${tab.id}`}
             id={`tab-${tab.id}`}
             tabIndex={isActive ? 0 : -1}

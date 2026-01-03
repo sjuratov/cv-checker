@@ -100,9 +100,10 @@ export function AnalyzeButton() {
           <div className="progress-container">
             {analysis.progress && (
               <>
+                {/* Dynamic width based on progress - inline style required */}
                 <div className="progress-bar-wrapper">
                   <div 
-                    className="progress-bar-fill" 
+                    className="progress-bar-fill"
                     style={{ width: `${(analysis.progress.currentStep / analysis.progress.totalSteps) * 100}%` }}
                   />
                 </div>

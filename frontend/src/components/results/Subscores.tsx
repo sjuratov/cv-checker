@@ -41,7 +41,7 @@ export function Subscores({
               <div className="subscore-bar">
                 <div
                   className={`subscore-fill subscore-fill-${label.toLowerCase()}`}
-                  style={{ '--score-width': `${subscore.score}%` } as React.CSSProperties}
+                  style={{ ['--score-width' as any]: `${subscore.score}%` }}
                 />
               </div>
             </div>

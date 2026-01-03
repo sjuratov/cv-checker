@@ -156,7 +156,7 @@ export function LinkedInURLInput() {
             onKeyPress={handleKeyPress}
             disabled={isLoading}
             aria-label="LinkedIn job URL"
-            aria-invalid={error ? 'true' : 'false'}
+            aria-invalid={error ? "true" : "false"}
           />
         </div>
 

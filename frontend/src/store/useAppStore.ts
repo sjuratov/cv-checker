@@ -4,7 +4,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AnalyzeResponse, AnalysisHistory } from '../types/api';
+import type { AnalyzeResponse } from '../types/api';
 
 interface CVData {
   filename: string | null;

@@ -81,13 +81,20 @@ export interface HistoryResponse {
 // ============================================================================
 
 export class APIError extends Error {
+  statusCode?: number;
+  errorType?: string;
+  details?: Record<string, any>;
+
   constructor(
     message: string,
-    public statusCode?: number,
-    public errorType?: string,
-    public details?: Record<string, any>
+    statusCode?: number,
+    errorType?: string,
+    details?: Record<string, any>
   ) {
     super(message);
     this.name = 'APIError';
+    this.statusCode = statusCode;
+    this.errorType = errorType;
+    this.details = details;
   }
 }
