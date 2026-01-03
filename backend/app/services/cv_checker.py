@@ -1,7 +1,7 @@
 """CV Checker service - business logic layer."""
 
 import logging
-from typing import Optional
+from typing import Optional, AsyncIterator, Dict, Any
 
 from agent_framework.azure import AzureOpenAIChatClient
 
@@ -76,6 +76,49 @@ class CVCheckerService:
             logger.info(f"Analysis completed with ID: {result.id}")
 
             return result
+
+        except Exception as e:
+            logger.error(f"CV analysis failed: {e}", exc_info=True)
+            raise
+
+    async def analyze_cv_with_progress(
+        self, cv_markdown: str, job_description: str
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Analyze CV against job description with progress updates.
+
+        Executes sequential workflow with streaming progress:
+        1. JobParser Agent - Extract job requirements
+        2. CVParser Agent - Extract CV data
+        3. Analyzer Agent - Hybrid scoring (deterministic + LLM)
+        4. ReportGenerator Agent - Create recommendations
+
+        Args:
+            cv_markdown: CV content in Markdown format
+            job_description: Job description text
+
+        Yields:
+            Progress updates and final result
+
+        Raises:
+            Exception: If agent workflow fails
+        """
+        logger.info(
+            f"Starting CV analysis with progress - CV length: {len(cv_markdown)}, "
+            f"JD length: {len(job_description)}"
+        )
+
+        try:
+            # Execute agent workflow with progress
+            async for chunk in self.orchestrator.execute_with_progress(
+                cv_markdown=cv_markdown,
+                job_description=job_description,
+            ):
+                yield chunk
+                
+                if chunk.get("type") == "result":
+                    result = chunk["data"]
+                    logger.info(f"Analysis completed with ID: {result.id}")
 
         except Exception as e:
             logger.error(f"CV analysis failed: {e}", exc_info=True)

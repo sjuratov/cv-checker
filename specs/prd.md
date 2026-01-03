@@ -445,6 +445,283 @@ Phase 2 introduces **session-based user identification** without authentication:
 
 ---
 
+### Feature 3B: Real-Time Progress Tracking
+
+**Description:** Display real-time progress updates during CV analysis to reduce perceived wait time and build user trust by showing AI agents actively working through analysis steps.
+
+**User Story:**
+> As a job seeker, I want to see real-time progress while my CV is being analyzed so that I understand what's happening during the 20-40 second wait and feel confident the system is working.
+
+**Context:**
+- CV analysis currently takes 20-40 seconds with 4 distinct backend processing steps
+- Backend already logs progress: "Step 1/4: Parsing job description...", "Step 2/4: Parsing CV...", "Step 3/4: Analyzing compatibility...", "Step 4/4: Generating recommendations..."
+- Users currently see only a generic "Analyzing..." spinner with no progress indication
+- This creates uncertainty and can lead to users abandoning the analysis or refreshing the page
+
+**Requirements:**
+
+**FR3B.1** - Progress Bar Visualization
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Display a visual progress bar showing analysis completion percentage
+- **Acceptance Criteria:**
+  - Progress bar fills from 0% to 100% as analysis proceeds
+  - Each of the 4 steps represents 25% progress
+  - Progress bar updates in real-time (not delayed by polling)
+  - Smooth visual transitions between progress states
+  - Color coding: neutral (in progress) → success (completed)
+  - Progress bar remains visible throughout entire analysis
+
+**FR3B.2** - Step-by-Step Status List
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Display list of all 4 analysis steps with real-time status indicators
+- **Acceptance Criteria:**
+  - Four steps displayed:
+    1. "Parsing job description..."
+    2. "Parsing CV..."
+    3. "Analyzing compatibility..."
+    4. "Generating recommendations..."
+  - Visual indicators for each step:
+    - ✓ Checkmark icon for completed steps
+    - ⏳ Progress/spinner icon for current step
+    - ○ Empty/pending icon for upcoming steps
+  - Current step highlighted or emphasized visually
+  - Completed steps show checkmark and de-emphasized styling
+  - Pending steps shown in muted/grayed out state
+  - Step transitions happen immediately when backend reports progress
+
+**FR3B.3** - Streaming JSON Response
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Backend streams progress updates to frontend in real-time
+- **Acceptance Criteria:**
+  - Backend sends Server-Sent Events (SSE) or chunked JSON responses
+  - Each progress update includes:
+    - `step_number`: 1-4 (current step)
+    - `step_name`: Human-readable step description
+    - `progress_percentage`: 0-100
+    - `status`: "in_progress" | "completed"
+  - Updates sent immediately when each agent completes its work
+  - Final message includes complete analysis results
+  - Connection closed gracefully after analysis completes
+  - Error handling: If streaming fails, fallback to polling or show error message
+
+**FR3B.4** - Frontend Real-Time Updates
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Frontend consumes streaming updates and updates UI instantly
+- **Acceptance Criteria:**
+  - Establish SSE connection or polling mechanism when analysis starts
+  - Update progress bar percentage on each message received
+  - Update step status icons (pending → in progress → completed)
+  - Highlight current step name
+  - Display final results when step 4 completes
+  - Handle connection errors gracefully (retry, timeout, fallback to generic spinner)
+  - Close connection after analysis completes
+
+**FR3B.5** - Location & Layout
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Progress tracking UI appears during analysis on the analysis screen
+- **Acceptance Criteria:**
+  - Displayed prominently during the 20-40 second analysis wait
+  - Replaces or overlays generic "Analyzing..." spinner
+  - Positioned centrally or in modal/overlay for visibility
+  - Does not block other UI elements unnecessarily
+  - Transitions smoothly to results when analysis completes
+  - Mobile-responsive layout (progress bar + steps stack vertically if needed)
+
+**FR3B.6** - Error Handling & Edge Cases
+- **Priority:** P1 (Should Have - Phase 2)
+- **Description:** Gracefully handle failures during progress tracking
+- **Acceptance Criteria:**
+  - If streaming connection fails, fallback to generic spinner
+  - If analysis fails mid-step, show error message with step where failure occurred
+  - Timeout after 60 seconds with clear error message
+  - Allow user to retry analysis from error state
+  - Log all progress tracking errors for debugging
+  - Handle network interruptions (reconnect or show offline message)
+
+**User Acceptance Criteria:**
+- Users see each of the 4 steps update in real-time as they complete
+- Progress bar visually fills from 0% → 100% (25% per step)
+- Current step shows "in progress" indicator (spinner/hourglass icon)
+- Completed steps show checkmark icon
+- Updates appear instantly (not delayed by polling intervals)
+- Analysis screen feels responsive and trustworthy during wait time
+- Users understand what the system is doing at each stage
+- Perceived wait time feels shorter due to progress visibility
+
+**Benefits:**
+- **Reduced Perceived Wait Time:** Users perceive shorter waits when they see progress
+- **Increased Trust:** Transparency about what's happening builds confidence in the system
+- **Better UX:** Users are less likely to abandon or refresh the page
+- **Educational:** Users learn about the analysis process (4-agent architecture)
+- **Professionalism:** Real-time updates signal a sophisticated, well-engineered system
+
+**Technical Considerations:**
+
+1. **Backend Streaming Approach:**
+   - **Option A (Recommended):** Server-Sent Events (SSE) for unidirectional streaming from server to client
+   - **Option B:** WebSockets for bidirectional communication (overkill for one-way updates)
+   - **Option C:** Polling with short intervals (1-2 seconds) - less efficient but simpler to implement
+   - **Recommendation:** Use SSE for real-time streaming; fallback to polling if SSE not supported
+
+2. **Message Format (SSE):**
+   ```json
+   {
+     "event": "progress",
+     "data": {
+       "step_number": 2,
+       "step_name": "Parsing CV...",
+       "progress_percentage": 50,
+       "status": "in_progress",
+       "timestamp": "2026-01-03T10:15:30Z"
+     }
+   }
+   ```
+
+3. **Final Message (SSE):**
+   ```json
+   {
+     "event": "complete",
+     "data": {
+       "analysis_id": "uuid",
+       "overall_score": 75,
+       "summary": {...},
+       "recommendations": [...]
+     }
+   }
+   ```
+
+4. **FastAPI SSE Implementation:**
+   ```python
+   from fastapi import FastAPI
+   from fastapi.responses import StreamingResponse
+   import asyncio
+   
+   async def analysis_event_stream(cv_id, job_id):
+       # Step 1
+       yield f"data: {json.dumps({'step_number': 1, 'step_name': 'Parsing job description...', 'progress_percentage': 25, 'status': 'in_progress'})}\n\n"
+       await asyncio.sleep(5)  # Simulate agent work
+       
+       # Step 2
+       yield f"data: {json.dumps({'step_number': 2, 'step_name': 'Parsing CV...', 'progress_percentage': 50, 'status': 'in_progress'})}\n\n"
+       await asyncio.sleep(5)
+       
+       # Step 3
+       yield f"data: {json.dumps({'step_number': 3, 'step_name': 'Analyzing compatibility...', 'progress_percentage': 75, 'status': 'in_progress'})}\n\n"
+       await asyncio.sleep(5)
+       
+       # Step 4
+       yield f"data: {json.dumps({'step_number': 4, 'step_name': 'Generating recommendations...', 'progress_percentage': 100, 'status': 'in_progress'})}\n\n"
+       await asyncio.sleep(5)
+       
+       # Final results
+       yield f"data: {json.dumps({'event': 'complete', 'analysis_id': '...', 'overall_score': 75, ...})}\n\n"
+   
+   @app.post("/api/v1/analyses/stream")
+   async def stream_analysis(cv_id: str, job_id: str):
+       return StreamingResponse(analysis_event_stream(cv_id, job_id), media_type="text/event-stream")
+   ```
+
+5. **Frontend SSE Consumer (JavaScript/TypeScript):**
+   ```typescript
+   const eventSource = new EventSource('/api/v1/analyses/stream?cv_id=...&job_id=...');
+   
+   eventSource.onmessage = (event) => {
+     const data = JSON.parse(event.data);
+     
+     if (data.event === 'complete') {
+       // Display final results
+       displayAnalysisResults(data);
+       eventSource.close();
+     } else {
+       // Update progress UI
+       updateProgressBar(data.progress_percentage);
+       updateStepStatus(data.step_number, data.status);
+     }
+   };
+   
+   eventSource.onerror = (error) => {
+     console.error('SSE error:', error);
+     eventSource.close();
+     // Fallback to polling or show error
+   };
+   ```
+
+6. **Orchestrator Agent Integration:**
+   - Modify Orchestrator Agent to emit progress events after each agent completes
+   - Use event emitter pattern or callback mechanism
+   - Example:
+     ```python
+     async def run_analysis(cv_id, job_id, progress_callback):
+         await progress_callback(1, "Parsing job description...", 25)
+         job_data = await job_parser_agent.parse(job_id)
+         
+         await progress_callback(2, "Parsing CV...", 50)
+         cv_data = await cv_parser_agent.parse(cv_id)
+         
+         await progress_callback(3, "Analyzing compatibility...", 75)
+         analysis = await analyzer_agent.analyze(cv_data, job_data)
+         
+         await progress_callback(4, "Generating recommendations...", 100)
+         recommendations = await report_generator_agent.generate(analysis)
+         
+         return analysis, recommendations
+     ```
+
+7. **Performance Considerations:**
+   - SSE connections are long-lived but lightweight
+   - Limit concurrent SSE connections per user (prevent abuse)
+   - Close connections immediately after analysis completes
+   - Use connection pooling for Azure Cosmos DB to avoid connection exhaustion
+
+8. **Error Scenarios:**
+   - SSE connection lost mid-analysis: Retry connection or fallback to polling
+   - Analysis fails at step 2: Send error event with step number, show user-friendly message
+   - Timeout (>60s): Close connection, show timeout error, allow retry
+   - Backend unavailable: Show connection error, suggest retrying later
+
+**Success Metrics:**
+
+1. **User Engagement:**
+   - 90%+ of users see progress updates during analysis (SSE connection success rate)
+   - Average time on analysis screen increases by 10% (users watch progress instead of navigating away)
+   - Page abandonment rate decreases by 25% during analysis wait
+
+2. **User Satisfaction:**
+   - User survey: 80%+ rate progress tracking as "helpful" or "very helpful"
+   - User survey: 70%+ feel more confident in the system with progress visibility
+   - NPS increases by 5+ points compared to generic spinner
+
+3. **Technical Performance:**
+   - SSE connection established within 500ms
+   - Progress updates delivered within 200ms of agent completion
+   - 95%+ of analyses complete all 4 progress updates without errors
+   - Fallback to polling occurs in <5% of sessions
+
+**Implementation Timeline:**
+
+**Week 8-9 (Phase 2):**
+- Implement SSE streaming endpoint in FastAPI
+- Modify Orchestrator Agent to emit progress events
+- Build frontend progress UI component (progress bar + step list)
+- Connect frontend to SSE stream
+- Error handling and fallback logic
+
+**Week 10 (Phase 2):**
+- User testing with progress tracking
+- Performance optimization
+- Bug fixes and polish
+
+**Risks & Mitigation:**
+
+| Risk | Impact | Probability | Mitigation |
+|------|--------|-------------|------------|
+| SSE not supported in older browsers | Medium | Low | Detect support; fallback to polling for older browsers |
+| Backend streaming adds complexity | Medium | Medium | Isolate streaming logic; test thoroughly; maintain non-streaming fallback |
+| Network issues interrupt stream | Medium | Medium | Implement retry logic; fallback to polling; clear error messages |
+| Progress updates feel "choppy" | Low | Medium | Use CSS transitions for smooth progress bar fills; debounce rapid updates |
+
+---
+
 ### Feature 4: Recommendation Report
 
 **Description:** Generate comprehensive, actionable recommendations for CV improvement.
@@ -1599,6 +1876,19 @@ Response: 200 OK
 - [ ] Average time to first analysis <5 minutes
 - [ ] LinkedIn URL fetch success rate >85% in user testing
 - [ ] User satisfaction survey score ≥4/5
+
+**AC2.8 - Real-Time Progress Tracking**
+- [ ] Backend streams progress updates via Server-Sent Events (SSE)
+- [ ] Progress bar displays 0% → 25% → 50% → 75% → 100% as steps complete
+- [ ] Step list shows 4 steps with real-time status indicators (✓, ⏳, ○)
+- [ ] Updates appear within 200ms of each agent completing its work
+- [ ] Current step highlighted with progress/spinner icon
+- [ ] Completed steps show checkmark icon
+- [ ] Pending steps show empty/pending icon
+- [ ] SSE connection success rate >90%
+- [ ] Fallback to polling or error message if SSE fails
+- [ ] User testing: 80%+ rate progress tracking as "helpful" or "very helpful"
+- [ ] Page abandonment during analysis decreases by 25%
 
 ---
 

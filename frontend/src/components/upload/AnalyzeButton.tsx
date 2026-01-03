@@ -13,6 +13,7 @@ export function AnalyzeButton() {
     currentJob,
     analysis,
     startAnalysis,
+    updateProgress,
     completeAnalysis,
     failAnalysis,
   } = useAppStore();
@@ -29,14 +30,20 @@ export function AnalyzeButton() {
     startAnalysis();
 
     try {
-      // Call analysis service
-      const result = await AnalysisService.analyze({
-        cvMarkdown: currentCV.content,
-        cvFilename: currentCV.filename || 'resume.pdf',
-        jobDescription: currentJob.description,
-        sourceType: currentJob.sourceType,
-        sourceUrl: currentJob.sourceUrl,
-      });
+      // Call streaming analysis service
+      const result = await AnalysisService.analyzeWithProgress(
+        {
+          cvMarkdown: currentCV.content,
+          cvFilename: currentCV.filename || 'resume.pdf',
+          jobDescription: currentJob.description,
+          sourceType: currentJob.sourceType,
+          sourceUrl: currentJob.sourceUrl,
+        },
+        (step, totalSteps, message) => {
+          // Update progress in store
+          updateProgress(step, totalSteps, message);
+        }
+      );
 
       if (result.success && result.data) {
         // Analysis succeeded
@@ -90,9 +97,53 @@ export function AnalyzeButton() {
 
       {analysis.isLoading && (
         <div className="loading-status">
-          <p className="loading-text">
-            🤖 Our AI agents are analyzing your CV against the job description...
-            <br />
+          <div className="progress-container">
+            {analysis.progress && (
+              <>
+                <div className="progress-bar-wrapper">
+                  <div 
+                    className="progress-bar-fill" 
+                    style={{ width: `${(analysis.progress.currentStep / analysis.progress.totalSteps) * 100}%` }}
+                  />
+                </div>
+                <div className="progress-steps">
+                  {[1, 2, 3, 4].map((step) => {
+                    const stepMessages = [
+                      'Parsing job description',
+                      'Parsing CV',
+                      'Analyzing compatibility',
+                      'Generating recommendations',
+                    ];
+                    
+                    const isCompleted = analysis.progress && step < analysis.progress.currentStep;
+                    const isCurrent = analysis.progress && step === analysis.progress.currentStep;
+
+                    return (
+                      <div
+                        key={step}
+                        className={`progress-step ${
+                          isCompleted ? 'completed' : isCurrent ? 'current' : 'pending'
+                        }`}
+                      >
+                        <span className="step-icon">
+                          {isCompleted ? '✓' : isCurrent ? '⏳' : '○'}
+                        </span>
+                        <span className="step-text">
+                          Step {step}/4: {stepMessages[step - 1]}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {!analysis.progress && (
+              <p className="loading-text">
+                🤖 Starting analysis...
+              </p>
+            )}
+          </div>
+          <p className="loading-subtext">
             <small>This typically takes 20-40 seconds as multiple AI agents work together.</small>
           </p>
         </div>

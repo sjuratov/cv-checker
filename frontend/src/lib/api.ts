@@ -232,6 +232,100 @@ class CVCheckerAPI {
   }
 
   /**
+   * Analyze CV against job description with streaming progress updates
+   * @param request - CV markdown and job description
+   * @param onProgress - Callback for progress updates
+   * @returns Analysis results with score, matches, recommendations
+   * @throws Error on validation failure, server error, or network issue
+   */
+  async analyzeWithProgress(
+    request: AnalyzeRequest,
+    onProgress: (step: number, totalSteps: number, message: string) => void
+  ): Promise<AnalyzeResponse> {
+    // Validate request before sending
+    if (!request.cv_markdown || request.cv_markdown.trim().length === 0) {
+      throw new Error('CV content is required');
+    }
+
+    if (!request.job_description || request.job_description.trim().length === 0) {
+      throw new Error('Job description is required');
+    }
+
+    try {
+      console.log('[API] Starting streaming CV analysis...', {
+        cvLength: request.cv_markdown.length,
+        jobLength: request.job_description.length,
+      });
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/analyze/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Request-ID': `req-${Date.now()}-${Math.random()}`,
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let result: AnalyzeResponse | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          try {
+            const chunk = JSON.parse(line);
+
+            if (chunk.type === 'progress') {
+              onProgress(chunk.step, chunk.total_steps, chunk.message);
+            } else if (chunk.type === 'result') {
+              result = chunk.data as AnalyzeResponse;
+            } else if (chunk.type === 'error') {
+              throw new Error(chunk.message || 'Analysis failed');
+            }
+          } catch (parseError) {
+            console.warn('[API] Failed to parse chunk:', line, parseError);
+          }
+        }
+      }
+
+      if (!result) {
+        throw new Error('No result received from server');
+      }
+
+      console.log('[API] Streaming analysis completed', {
+        score: result.overall_score,
+        analysisId: result.analysis_id,
+      });
+
+      return result;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error('Analysis failed unexpectedly');
+    }
+  }
+
+  /**
    * Test connection to backend
    * @returns true if connection successful
    */

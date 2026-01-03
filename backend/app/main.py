@@ -2,13 +2,14 @@
 
 import logging
 import uuid
+import json
 from contextlib import asynccontextmanager
 from time import time
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -615,6 +616,175 @@ async def analyze_cv(
                 "details": {"error_type": type(e).__name__},
             },
         )
+
+
+@app.post(
+    "/api/v1/analyze/stream",
+    summary="Analyze CV with real-time progress",
+    description="Submit a CV and job description to receive detailed matching analysis with real-time progress updates",
+    responses={
+        200: {
+            "description": "Successful streaming analysis with progress updates",
+            "content": {
+                "application/x-ndjson": {
+                    "example": '{"type":"progress","step":1,"total_steps":4,"message":"Parsing job description...","status":"in_progress"}\\n{"type":"result","data":{...}}'
+                }
+            },
+        },
+        400: {
+            "description": "Invalid request (e.g., empty CV or job description)",
+            "model": ErrorResponse,
+        },
+        500: {
+            "description": "Internal server error (e.g., AI service failure)",
+            "model": ErrorResponse,
+        },
+    },
+    tags=["Analysis"],
+)
+async def analyze_cv_stream(
+    request: AnalyzeRequest,
+    service: CVCheckerService = Depends(get_service),
+    cosmos_repository: CosmosDBRepository | None = Depends(get_cosmos_repository),
+) -> StreamingResponse:
+    """
+    Analyze CV against job description with real-time progress updates.
+
+    This endpoint streams progress updates during the multi-agent workflow:
+    1. Parse job requirements
+    2. Parse CV content
+    3. Perform comparative analysis
+    4. Generate recommendations
+
+    Args:
+        request: AnalyzeRequest with CV and job description
+        service: CV Checker service instance
+        cosmos_repository: Cosmos DB repository (optional)
+
+    Returns:
+        StreamingResponse with newline-delimited JSON progress updates
+
+    Raises:
+        HTTPException: On validation or processing errors
+    """
+    
+    async def generate_progress():
+        """Generator for streaming progress updates."""
+        try:
+            logger.info(
+                f"Starting streaming CV analysis - CV length: {len(request.cv_markdown)}, "
+                f"JD length: {len(request.job_description)}"
+            )
+
+            # Store CV and Job in Cosmos DB if configured
+            user_id = "anonymous"
+            cv_id = ""
+            job_id = ""
+            
+            if cosmos_repository:
+                try:
+                    cv_id = await cosmos_repository.create_cv(
+                        user_id, 
+                        request.cv_markdown,
+                        filename=request.cv_filename or "resume.pdf"
+                    )
+                    job_id = await cosmos_repository.create_job(
+                        user_id,
+                        request.job_description,
+                        source_type="manual",
+                        source_url=None
+                    )
+                    logger.info(f"Stored CV: {cv_id}, Job: {job_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to store CV/Job in Cosmos DB: {e}")
+
+            # Execute analysis workflow with progress
+            analysis_result = None
+            async for chunk in service.analyze_cv_with_progress(
+                cv_markdown=request.cv_markdown,
+                job_description=request.job_description,
+            ):
+                # Stream progress updates
+                if chunk.get("type") == "progress":
+                    yield json.dumps(chunk) + "\n"
+                elif chunk.get("type") == "result":
+                    analysis_result = chunk["data"]
+
+            # Use source type and URL from request
+            source_type = request.source_type or "manual"
+            source_url = request.source_url
+            
+            # If Cosmos DB is configured, create analysis document
+            if cosmos_repository and analysis_result:
+                try:
+                    analysis_id = await cosmos_repository.create_analysis(
+                        user_id=user_id,
+                        cv_markdown=request.cv_markdown,
+                        job_description=request.job_description,
+                        source_type=source_type,
+                        source_url=source_url,
+                        result=analysis_result,
+                        cv_id=cv_id,
+                        job_id=job_id,
+                    )
+                    logger.info(f"Created analysis document: {analysis_id}")
+                    analysis_result.id = analysis_id
+                except Exception as e:
+                    logger.warning(f"Failed to create analysis document: {e}")
+
+            # Convert to API response and stream final result
+            if analysis_result:
+                response_data = {
+                    "analysis_id": analysis_result.id,
+                    "cv_markdown": request.cv_markdown,
+                    "job_description": request.job_description,
+                    "source_type": source_type,
+                    "source_url": source_url,
+                    "overall_score": analysis_result.overall_score,
+                    "skill_matches": [
+                        match.model_dump() for match in analysis_result.skill_matches
+                    ],
+                    "experience_match": analysis_result.experience_match,
+                    "education_match": analysis_result.education_match,
+                    "strengths": analysis_result.strengths,
+                    "gaps": analysis_result.gaps,
+                    "recommendations": analysis_result.recommendations,
+                }
+                
+                final_chunk = {
+                    "type": "result",
+                    "data": response_data
+                }
+                yield json.dumps(final_chunk) + "\n"
+                
+                logger.info(
+                    f"Streaming analysis completed - Score: {analysis_result.overall_score}"
+                )
+
+        except ValueError as e:
+            error_chunk = {
+                "type": "error",
+                "error": "ValidationError",
+                "message": str(e)
+            }
+            yield json.dumps(error_chunk) + "\n"
+        except Exception as e:
+            logger.error(f"Streaming analysis failed: {str(e)}", exc_info=True)
+            error_chunk = {
+                "type": "error",
+                "error": "AnalysisError",
+                "message": "Failed to complete CV analysis"
+            }
+            yield json.dumps(error_chunk) + "\n"
+
+    return StreamingResponse(
+        generate_progress(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 # Root endpoint

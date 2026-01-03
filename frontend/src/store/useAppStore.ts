@@ -23,6 +23,11 @@ interface AnalysisState {
   isLoading: boolean;
   error: string | null;
   result: AnalyzeResponse | null;
+  progress: {
+    currentStep: number;
+    totalSteps: number;
+    message: string;
+  } | null;
 }
 
 interface AppState {
@@ -41,6 +46,7 @@ interface AppState {
   // Analysis state
   analysis: AnalysisState;
   startAnalysis: () => void;
+  updateProgress: (step: number, totalSteps: number, message: string) => void;
   completeAnalysis: (result: AnalyzeResponse) => void;
   failAnalysis: (error: string) => void;
   clearAnalysis: () => void;
@@ -127,6 +133,7 @@ export const useAppStore = create<AppState>()(
         isLoading: false,
         error: null,
         result: null,
+        progress: null,
       },
 
       startAnalysis: () =>
@@ -135,8 +142,21 @@ export const useAppStore = create<AppState>()(
             isLoading: true,
             error: null,
             result: null,
+            progress: null,
           },
         }),
+
+      updateProgress: (step, totalSteps, message) =>
+        set((state) => ({
+          analysis: {
+            ...state.analysis,
+            progress: {
+              currentStep: step,
+              totalSteps,
+              message,
+            },
+          },
+        })),
 
       completeAnalysis: (result) =>
         set({
@@ -144,6 +164,7 @@ export const useAppStore = create<AppState>()(
             isLoading: false,
             error: null,
             result,
+            progress: null,
           },
           currentView: 'results',
         }),
@@ -154,6 +175,7 @@ export const useAppStore = create<AppState>()(
             isLoading: false,
             error,
             result: null,
+            progress: null,
           },
         }),
 
@@ -163,6 +185,7 @@ export const useAppStore = create<AppState>()(
             isLoading: false,
             error: null,
             result: null,
+            progress: null,
           },
         }),
 
@@ -207,6 +230,7 @@ export const useAppStore = create<AppState>()(
             isLoading: false,
             error: null,
             result: null,
+            progress: null,
           },
           currentView: 'upload',
         }),
@@ -224,7 +248,7 @@ export const useAppStore = create<AppState>()(
             currentCV: { filename: null, content: null, uploadedAt: null },
             currentJob: { description: '', lastModified: null, sourceType: 'manual', sourceUrl: null },
             jobInputMode: 'manual',
-            analysis: { isLoading: false, error: null, result: null },
+            analysis: { isLoading: false, error: null, result: null, progress: null },
             currentView: 'upload',
           };
         }
